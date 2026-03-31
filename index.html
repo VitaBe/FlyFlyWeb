@@ -870,7 +870,7 @@
             const [errorMessage, setErrorMessage] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
             const [selectedColumns, setSelectedColumns] = useState([]);
-            const [selectedPage, setSelectedPage] = useState('OFP');
+            const [selectedPage, setSelectedPage] = useState('summary');
 
             /**
              * Handles file upload and processing.
@@ -918,16 +918,16 @@
             // Main application interface
             return h('div', { className: "max-w-6xl mx-auto p-3 sm:p-6 animate-in" },
 
-                // Subpage menu (OFP / Flight Summary)
+                // Subpage menu (Flight Summary / OFP)
                 h('div', { className: "flex items-center gap-3 mb-4 sm:mb-6" },
-                    h('button', {
-                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'OFP' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
-                        onClick: () => setSelectedPage('OFP')
-                    }, 'OFP'),
                     h('button', {
                         className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'summary' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
                         onClick: () => setSelectedPage('summary')
-                    }, 'Flight Summary')
+                    }, 'Flight Summary'),
+                    h('button', {
+                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'OFP' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                        onClick: () => setSelectedPage('OFP')
+                    }, 'OFP')
                 ),
 
                 // Route header with destination info and controls
