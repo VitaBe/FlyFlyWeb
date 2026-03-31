@@ -987,6 +987,10 @@
             const summaryInfo = summary.summaryAdditionalInfo || {};
             const etopsMinutes = parseDurationToMinutes(summaryInfo.diversion);
             const atcText = typeof summary.ATC === 'string' ? summary.ATC.trim() : '';
+            const dispatcherRemarks = Array.isArray(summary.remarks?.dispatcher) ? summary.remarks.dispatcher.filter(Boolean) : [];
+            const melCdlRemarks = Array.isArray(summary.remarks?.MELCDL) ? summary.remarks.MELCDL.filter(Boolean) : [];
+            const dispatcherRemarksText = dispatcherRemarks.join('\n') || '-';
+            const melCdlRemarksText = melCdlRemarks.join('\n') || '-';
             const optiClimbHtml = sanitizeRichText(
                 summary.optiClimb || summary.recommendations?.opti?.find((entry) =>
                     /opticlimb/i.test(entry?.title || '') || /opticlimb/i.test(entry?.text || '')
@@ -1064,6 +1068,20 @@
                     h('pre', {
                         className: "whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed text-gray-700 bg-gray-50 rounded-2xl p-4 overflow-x-auto font-mono"
                     }, atcText)
+                ),
+
+                h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6 uppercase" }, "Dispatcher Remarks"),
+                    h('pre', {
+                        className: "whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed text-gray-700 bg-gray-50 rounded-2xl p-4 overflow-x-auto font-mono"
+                    }, dispatcherRemarksText)
+                ),
+
+                h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6 uppercase" }, "MEL/CDL ITEMS"),
+                    h('pre', {
+                        className: "whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed text-gray-700 bg-gray-50 rounded-2xl p-4 overflow-x-auto font-mono"
+                    }, melCdlRemarksText)
                 )
             );
         };
