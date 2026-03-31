@@ -107,6 +107,20 @@
         };
 
         /**
+         * Formats an ISO date string into UTC time only (HH:MMZ).
+         * @param {string} isoString - The ISO date string to format.
+         * @returns {string} Formatted UTC time or "-" if invalid.
+         */
+        const formatUtcTimeOnly = (isoString) => {
+            if (!isoString) return '-';
+            const date = new Date(isoString);
+            if (isNaN(date)) return '-';
+            const hours = String(date.getUTCHours()).padStart(2, '0');
+            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+            return `${hours}:${minutes}Z`;
+        };
+
+        /**
          * Formats fuel data into a readable string and raw numbers for calculation.
          * Handles both remaining and cumulative fuel values with units.
          * @param {Object} fuel - The fuel object from the waypoint data.
@@ -651,15 +665,6 @@
         const RouteHeader = ({ route, atcCallsign, flightNumber, originIcao, destinationIcao, ofpVersion, scheduledTimes }) => {
             const headerTitle = `${flightNumber || 'N/A'} - ${ofpVersion || 'N/A'}`;
             const headerSubtitle = `${originIcao || 'N/A'} ${destinationIcao || 'N/A'}`;
-
-            const formatUtcTimeOnly = (isoString) => {
-                if (!isoString) return '-';
-                const date = new Date(isoString);
-                if (isNaN(date)) return '-';
-                const hours = String(date.getUTCHours()).padStart(2, '0');
-                const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-                return `${hours}:${minutes}Z`;
-            };
 
             const formatDurationCompact = (isoDuration) => {
                 const totalMinutes = parseDurationToMinutes(isoDuration);
@@ -1242,6 +1247,52 @@
                                 key: col,
                                 className: UI_STYLES.rowHeight + " " + UI_STYLES.value
                             }, getNestedValue(waypoint, col) || "-"))
+                        )
+                    )
+                )
+            );
+        };
+
+        /**
+         * OFF BLOCK section shown above the OFP waypoint list.
+         * Uses the waypoint card layout for the inner flight-origin card.
+         *
+         * @param {Object} props - Component properties
+         * @param {Object|null} props.summary - Parsed flight.backup object
+         */
+        const OffBlockSection = ({ summary }) => {
+            const offBlockTime = formatUtcTimeOnly(summary?.scheduledTimes?.offBlock);
+            const blockFuelEntry = Array.isArray(summary?.plannedFuels)
+                ? summary.plannedFuels.find((fuelEntry) => fuelEntry?.uid === 'blockFuel')
+                : null;
+            const blockFuelAmount = blockFuelEntry?.fuel?.amount;
+            const blockFuelUnit = blockFuelEntry?.fuel?.unit;
+            const blockFuelDisplay = blockFuelAmount !== undefined
+                ? `${formatNumber(blockFuelAmount)} ${String(blockFuelUnit || '').toUpperCase()}`.trim()
+                : '-';
+            const originTitle = summary?.originAirport?.icaoCode || '-';
+
+            return h('div', { className: "rounded-[2rem] border border-sky-100 bg-gradient-to-br from-sky-50 via-cyan-50 to-white p-3 sm:p-5 shadow-sm space-y-3" },
+                h('div', { className: "px-1 flex items-center justify-between gap-3" },
+                    h('div', null,
+                        h('p', { className: "text-[10px] uppercase font-bold tracking-[0.22em] text-sky-600 mb-1" }, 'OFF BLOCK'),
+                    ),
+                ),
+                h('div', { className: "bg-white/90 ring-1 ring-sky-200 p-3 sm:p-6 rounded-3xl shadow-[0_10px_30px_rgba(14,116,144,0.10)] flex items-start gap-3 sm:gap-6" },
+                    h('div', { className: "flex-1 overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0" },
+                        h('div', { className: "flex items-center justify-between gap-3 mb-3" },
+                            h('div', { className: "font-black text-base sm:text-xl text-gray-800 truncate" }, originTitle),
+                            h('div', { className: "text-[10px] uppercase font-bold tracking-widest text-sky-500 whitespace-nowrap" })
+                        ),
+                        h('div', { className: "grid grid-cols-[100px_100px] gap-x-6 gap-y-0 min-w-max" },
+                            h('div', { className: "contents" },
+                                h('div', { className: "text-[10px] uppercase font-bold text-sky-500 tracking-wider mb-1" }, 'Time'),
+                                h('div', { className: "text-[10px] uppercase font-bold text-sky-500 tracking-wider mb-1" }, 'Fuel')
+                            ),
+                            h('div', { className: "contents" },
+                                h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" }, offBlockTime),
+                                h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" }, blockFuelDisplay)
+                            )
                         )
                     )
                 )
@@ -1923,6 +1974,9 @@
                 // Page content (Summary, OFP, or Documents)
                 selectedPage === 'OFP'
                     ? h('div', { className: "space-y-4" },
+                        h(OffBlockSection, {
+                            summary: flightSummaryData
+                        }),
                         (routeData.waypoints || []).map((waypoint, index) =>
                             h(WaypointCard, {
                                 key: waypoint.UUID || index,
