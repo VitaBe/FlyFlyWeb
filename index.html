@@ -1441,6 +1441,24 @@
 
             const safeIndex = Math.min(Math.max(selectedDocumentIndex || 0, 0), documents.length - 1);
             const activeDocument = documents[safeIndex];
+            const isFirstDocument = safeIndex === 0;
+            const isLastDocument = safeIndex === documents.length - 1;
+
+            const handleSelectDocument = (targetIndex) => {
+                const clampedIndex = Math.min(Math.max(targetIndex, 0), documents.length - 1);
+                if (clampedIndex === safeIndex) return;
+
+                const currentScrollY = window.scrollY;
+                onSelectDocument(clampedIndex);
+
+                // Keep viewport stable even when switching between viewer types (e.g. GIF <-> PDF).
+                requestAnimationFrame(() => {
+                    window.scrollTo({ top: currentScrollY, left: 0, behavior: 'auto' });
+                });
+                setTimeout(() => {
+                    window.scrollTo({ top: currentScrollY, left: 0, behavior: 'auto' });
+                }, 120);
+            };
 
             return h('div', { className: "space-y-4" },
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
@@ -1448,7 +1466,8 @@
                         documents.map((documentItem, index) =>
                             h('button', {
                                 key: `${documentItem.name}-${index}`,
-                                onClick: () => onSelectDocument(index),
+                                type: 'button',
+                                onClick: () => handleSelectDocument(index),
                                 className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${index === safeIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`,
                                 title: documentItem.name
                             }, documentItem.name)
@@ -1457,6 +1476,24 @@
                 ),
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                     h('h3', { className: "text-sm sm:text-base font-bold text-gray-800 mb-4 break-words" }, activeDocument.name),
+                    h('div', { className: "flex items-center gap-2 mb-4" },
+                        h('button', {
+                            type: 'button',
+                            onClick: () => handleSelectDocument(safeIndex - 1),
+                            disabled: isFirstDocument,
+                            className: `h-9 w-9 rounded-full text-lg font-black transition ${isFirstDocument ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                            title: 'Previous document',
+                            'aria-label': 'Previous document'
+                        }, '←'),
+                        h('button', {
+                            type: 'button',
+                            onClick: () => handleSelectDocument(safeIndex + 1),
+                            disabled: isLastDocument,
+                            className: `h-9 w-9 rounded-full text-lg font-black transition ${isLastDocument ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                            title: 'Next document',
+                            'aria-label': 'Next document'
+                        }, '→')
+                    ),
                     h(DocumentViewer, { documentItem: activeDocument })
                 )
             );
