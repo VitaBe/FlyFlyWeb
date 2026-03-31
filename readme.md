@@ -2,12 +2,12 @@
 
 ## **Project Overview**
 
-FlightLog Pro is a lightweight, high-performance web application designed to visualize flight route data from .backup or .json log files. It was specifically developed to handle complex flight data structures and present them in a clean, user-friendly interface optimized for mobile and desktop viewing.  
+FlightLog Pro is a lightweight, high-performance web application designed to visualize flight route data from ZIP-compatible export files (for example `.zip` or `.effarchive`) that contain a `routes.backup` file. It was specifically developed to handle complex flight data structures and present them in a clean, user-friendly interface optimized for mobile and desktop viewing.  
 The application is built as a **Single File Application (SFA)**, meaning all logic, styles, and templates are contained within a single HTML file. This ensures maximum portability and eliminates common "Script Errors" caused by CORS or external module loading in offline environments.
 
 ## **Core Functionality**
 
-* **File Parsing:** Processes complex JSON structures containing multiple routes (Main, Alternates, etc.).  
+* **Archive Import:** Opens ZIP-compatible exports, extracts `routes.backup`, and parses it as route JSON.  
 * **Route Selection:** Automatically identifies the primary flight route (searching for id: 0\) while providing fallbacks for other data formats.  
 * **Data Chronology:** Implements a sorting algorithm that organizes waypoints by their sequenceId to ensure the flight path is displayed in the correct order, regardless of the JSON's internal sorting.  
 * **Aviation Metrics Visualization:** Extracts and formats specific aviation data displayed in WaypointCard rows:  
@@ -109,7 +109,7 @@ The app expects a JSON array or object containing:
 
 ## **How to Use**
 
-1. **Upload Flight Data:** Click "Choose File" on the welcome screen and select a .backup or .json file containing flight route data.
+1. **Upload Flight Data:** Click "Choose File" on the welcome screen and select a `.zip`/`.effarchive` export containing `routes.backup`.
 2. **View Flight Plan:** The application displays waypoints in chronological order with base columns (Time, Used Fuel, Remaining Fuel).
 3. **Configure Columns:** Click the **Settings (gear) icon** in the top-right to open the Column Settings panel.
 4. **Toggle Fields:** Check/uncheck any of the 19 available fields to add or remove columns from the waypoint grid (all default to hidden).

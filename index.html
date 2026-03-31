@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"
         crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin></script>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -329,6 +330,33 @@
             return mainRoute;
         };
 
+        /**
+         * Extracts the routes.backup JSON payload from a ZIP-compatible archive.
+         * @param {File} uploadedFile - User-selected archive file.
+         * @returns {Promise<string>} Raw JSON text from routes.backup.
+         * @throws {Error} If archive cannot be read or routes.backup is missing.
+         */
+        const readRoutesBackupFromArchive = async (uploadedFile) => {
+            if (!window.JSZip) {
+                throw new Error("ZIP library failed to load. Please refresh and try again.");
+            }
+
+            let zipArchive;
+            try {
+                const archiveBuffer = await uploadedFile.arrayBuffer();
+                zipArchive = await JSZip.loadAsync(archiveBuffer);
+            } catch (archiveError) {
+                throw new Error("Invalid archive file. Please upload a ZIP/.effarchive export.");
+            }
+
+            const backupEntry = zipArchive.file('routes.backup');
+            if (!backupEntry) {
+                throw new Error("The archive does not contain routes.backup.");
+            }
+
+            return backupEntry.async('string');
+        };
+
         // ==========================================
         // UI COMPONENTS
         // ==========================================
@@ -379,13 +407,14 @@
                 h('div', { className: "bg-white p-6 sm:p-12 rounded-3xl sm:rounded-[3rem] shadow-xl animate-in w-full max-w-sm sm:max-w-md" },
                     h(Icon, { name: "upload", className: "w-12 h-12 sm:w-16 sm:h-16 text-blue-600 mx-auto mb-4 sm:mb-6" }),
                     h('h1', { className: "text-2xl sm:text-3xl font-black mb-3 sm:mb-4" }, "FlightLog Pro"),
-                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload your .backup route file"),
+                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload a ZIP/.effarchive export containing routes.backup"),
                     h('label', {
                         className: "bg-blue-600 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-bold cursor-pointer hover:bg-blue-700 transition-all block"
                     },
                         "Choose File",
                         h('input', {
                             type: 'file',
+                            accept: '.zip,.effarchive,application/zip',
                             className: "hidden",
                             onChange: onFileSelected
                         })
@@ -882,8 +911,8 @@
                 if (!selectedFile) return;
 
                 try {
-                    const fileContent = await selectedFile.text();
-                    const processedRoute = processFlightData(fileContent);
+                    const backupJsonText = await readRoutesBackupFromArchive(selectedFile);
+                    const processedRoute = processFlightData(backupJsonText);
 
                     setRouteData(processedRoute);
                     setErrorMessage(null);
