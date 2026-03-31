@@ -334,9 +334,9 @@
         };
 
         /**
-         * Extracts routes.backup and flight.backup JSON payloads from a ZIP-compatible archive.
+         * Extracts routes.backup, flight.backup, and files listed in documents.backup from a ZIP-compatible archive.
          * @param {File} uploadedFile - User-selected archive file.
-         * @returns {Promise<{routesBackupText: string, flightBackupText: string|null, crewMembersBackupText: string|null, documentsBackupText: string|null, pdfFiles: Array<{name: string, blob: Blob}>}>}
+         * @returns {Promise<{routesBackupText: string, flightBackupText: string|null, crewMembersBackupText: string|null, documentsBackupText: string|null, documentFiles: Array<{name: string, extension: string, blob: Blob, textContent: string|null}>}>}
          * @throws {Error} If archive cannot be read or routes.backup is missing.
          */
         const readBackupFilesFromArchive = async (uploadedFile) => {
@@ -360,32 +360,59 @@
             const flightEntry = zipArchive.file('flight.backup');
             const crewMembersEntry = zipArchive.file('crewMembers.backup');
             const documentsEntry = zipArchive.file('documents.backup');
-            const pdfEntries = Object.values(zipArchive.files)
-                .filter((archiveEntry) => !archiveEntry.dir && /\.pdf$/i.test(archiveEntry.name));
 
-            const [routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, pdfBlobs] = await Promise.all([
+            const [routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText] = await Promise.all([
                 routesEntry.async('string'),
                 flightEntry ? flightEntry.async('string') : Promise.resolve(null),
                 crewMembersEntry ? crewMembersEntry.async('string') : Promise.resolve(null),
-                documentsEntry ? documentsEntry.async('string') : Promise.resolve(null),
-                Promise.all(pdfEntries.map((pdfEntry) => pdfEntry.async('blob')))
+                documentsEntry ? documentsEntry.async('string') : Promise.resolve(null)
             ]);
 
             const getArchiveBaseName = (archivePath) => archivePath.split('/').pop() || archivePath;
+            const archiveEntriesByBaseName = new Map(
+                Object.values(zipArchive.files)
+                    .filter((archiveEntry) => !archiveEntry.dir)
+                    .map((archiveEntry) => [getArchiveBaseName(archiveEntry.name).toLowerCase(), archiveEntry])
+            );
+            const documentMetadata = processDocumentMetadata(documentsBackupText);
+            const documentFiles = (await Promise.all(
+                documentMetadata.map(async (documentItem) => {
+                    const archiveEntry = archiveEntriesByBaseName.get(documentItem.filename.toLowerCase());
+                    if (!archiveEntry) return null;
 
-            const pdfFiles = pdfEntries.map((pdfEntry, index) => {
-                const originalBlob = pdfBlobs[index];
-                const pdfBlob = originalBlob.type === 'application/pdf'
-                    ? originalBlob
-                    : new Blob([originalBlob], { type: 'application/pdf' });
+                    if (documentItem.extension === 'txt') {
+                        const [textContent, originalBlob] = await Promise.all([
+                            archiveEntry.async('string'),
+                            archiveEntry.async('blob')
+                        ]);
+                        const textBlob = originalBlob.type === 'text/plain'
+                            ? originalBlob
+                            : new Blob([originalBlob], { type: 'text/plain' });
 
-                return {
-                    name: getArchiveBaseName(pdfEntry.name),
-                    blob: pdfBlob
-                };
-            });
+                        return {
+                            name: documentItem.filename,
+                            extension: documentItem.extension,
+                            blob: textBlob,
+                            textContent
+                        };
+                    }
 
-            return { routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, pdfFiles };
+                    const originalBlob = await archiveEntry.async('blob');
+                    const mimeType = getDocumentMimeType(documentItem.extension);
+                    const typedBlob = mimeType && originalBlob.type !== mimeType
+                        ? new Blob([originalBlob], { type: mimeType })
+                        : originalBlob;
+
+                    return {
+                        name: documentItem.filename,
+                        extension: documentItem.extension,
+                        blob: typedBlob,
+                        textContent: null
+                    };
+                })
+            )).filter(Boolean);
+
+            return { routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, documentFiles };
         };
 
         /**
@@ -400,9 +427,9 @@
         };
 
         /**
-         * Parses documents.backup and returns PDF document entries in metadata order.
+         * Parses documents.backup and returns document entries in metadata order.
          * @param {string|null} jsonText - Raw JSON string from documents.backup.
-         * @returns {Array<{filename: string}>} PDF document metadata entries.
+         * @returns {Array<{filename: string, extension: string}>} Document metadata entries.
          */
         const processDocumentMetadata = (jsonText) => {
             if (!jsonText) return [];
@@ -410,19 +437,65 @@
             const parsedData = JSON.parse(jsonText);
             if (!Array.isArray(parsedData)) return [];
 
-            return parsedData.filter((documentItem) => {
-                if (!documentItem || typeof documentItem !== 'object') return false;
+            return parsedData
+                .map((documentItem) => {
+                    if (!documentItem || typeof documentItem !== 'object') return null;
 
-                const filename = typeof documentItem.filename === 'string'
-                    ? documentItem.filename.trim()
-                    : '';
-                const extension = typeof documentItem.extension === 'string'
-                    ? documentItem.extension.trim().toLowerCase()
-                    : '';
+                    const filename = typeof documentItem.filename === 'string'
+                        ? documentItem.filename.trim()
+                        : '';
+                    const extension = typeof documentItem.extension === 'string'
+                        ? documentItem.extension.trim().toLowerCase()
+                        : '';
+                    const resolvedExtension = extension || getFileExtension(filename);
 
-                if (!filename) return false;
-                return extension === 'pdf' || /\.pdf$/i.test(filename);
-            });
+                    if (!filename) return null;
+
+                    return {
+                        filename,
+                        extension: resolvedExtension
+                    };
+                })
+                .filter(Boolean);
+        };
+
+        /**
+         * Extracts a normalized file extension from a filename.
+         * @param {string} fileName - File name including extension.
+         * @returns {string} Lowercase extension without the dot.
+         */
+        const getFileExtension = (fileName) => {
+            if (!fileName || typeof fileName !== 'string') return '';
+            const extension = fileName.split('.').pop();
+            return extension ? extension.trim().toLowerCase() : '';
+        };
+
+        /**
+         * Maps a supported document extension to a browser MIME type.
+         * @param {string} extension - Lowercase file extension.
+         * @returns {string} MIME type for blob rendering.
+         */
+        const getDocumentMimeType = (extension) => {
+            const mimeTypes = {
+                pdf: 'application/pdf',
+                txt: 'text/plain',
+                gif: 'image/gif',
+                jpg: 'image/jpeg',
+                jpeg: 'image/jpeg',
+                png: 'image/png',
+                webp: 'image/webp'
+            };
+
+            return mimeTypes[extension] || 'application/octet-stream';
+        };
+
+        /**
+         * Checks whether a document extension can be rendered as an image.
+         * @param {string} extension - Lowercase file extension.
+         * @returns {boolean} True when browser image rendering is supported.
+         */
+        const isImageDocument = (extension) => {
+            return ['gif', 'jpg', 'jpeg', 'png', 'webp'].includes(extension);
         };
 
         /**
@@ -1307,32 +1380,75 @@
         };
 
         /**
-         * PdfDocumentsPage - Displays PDF documents extracted from the archive.
-         * Renders a selectable list and a PDF.js canvas viewer (works on iOS).
+         * DocumentViewer - Renders a single document based on its file type.
+         * Supports PDF, text, and common image formats.
          *
-         * @param {Object} props - Component properties
-         * @param {Array<{name: string, url: string}>} props.pdfDocuments - Extracted PDF documents
-         * @param {number} props.selectedPdfIndex - Currently selected PDF index
-         * @param {Function} props.onSelectPdf - Callback to switch selected PDF
+         * @param {Object} props
+         * @param {{name: string, extension: string, url: string, textContent: string|null}} props.documentItem
          */
-        const PdfDocumentsPage = ({ pdfDocuments, selectedPdfIndex, onSelectPdf }) => {
-            if (!pdfDocuments || pdfDocuments.length === 0) {
-                return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
-                    h('h3', { className: "text-lg font-bold mb-2" }, "Documents"),
-                    h('p', null, "No PDF files were found in this archive.")
+        const DocumentViewer = ({ documentItem }) => {
+            if (!documentItem) {
+                return h('div', { className: "flex items-center justify-center h-32 text-gray-400 font-bold text-sm" }, 'No document selected.');
+            }
+
+            if (documentItem.extension === 'pdf') {
+                return h(PdfViewer, { url: documentItem.url });
+            }
+
+            if (documentItem.extension === 'txt') {
+                return h('pre', {
+                    className: "whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed text-gray-700 bg-gray-50 rounded-2xl p-4 overflow-x-auto font-mono"
+                }, documentItem.textContent || 'This text file is empty.');
+            }
+
+            if (isImageDocument(documentItem.extension)) {
+                return h('div', { className: "bg-gray-50 rounded-2xl p-2 sm:p-4" },
+                    h('img', {
+                        src: documentItem.url,
+                        alt: documentItem.name,
+                        className: "w-full h-auto rounded-xl mx-auto"
+                    })
                 );
             }
 
-            const safeIndex = Math.min(Math.max(selectedPdfIndex || 0, 0), pdfDocuments.length - 1);
-            const activeDocument = pdfDocuments[safeIndex];
+            return h('div', { className: "text-center py-10 text-gray-500" },
+                h('p', { className: "font-bold mb-2" }, 'Preview not available for this file type.'),
+                h('a', {
+                    href: documentItem.url,
+                    target: '_blank',
+                    rel: 'noreferrer',
+                    className: "inline-flex items-center px-4 py-2 rounded-xl bg-blue-600 text-white font-bold hover:bg-blue-700 transition"
+                }, 'Open File')
+            );
+        };
+
+        /**
+         * DocumentsPage - Displays documents extracted from documents.backup.
+         * Renders a selectable list and a type-aware viewer.
+         *
+         * @param {Object} props - Component properties
+         * @param {Array<{name: string, extension: string, url: string, textContent: string|null}>} props.documents - Extracted documents
+         * @param {number} props.selectedDocumentIndex - Currently selected document index
+         * @param {Function} props.onSelectDocument - Callback to switch selected document
+         */
+        const DocumentsPage = ({ documents, selectedDocumentIndex, onSelectDocument }) => {
+            if (!documents || documents.length === 0) {
+                return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
+                    h('h3', { className: "text-lg font-bold mb-2" }, "Documents"),
+                    h('p', null, "No files from documents.backup were found in this archive.")
+                );
+            }
+
+            const safeIndex = Math.min(Math.max(selectedDocumentIndex || 0, 0), documents.length - 1);
+            const activeDocument = documents[safeIndex];
 
             return h('div', { className: "space-y-4" },
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                     h('div', { className: "flex flex-wrap gap-2" },
-                        pdfDocuments.map((documentItem, index) =>
+                        documents.map((documentItem, index) =>
                             h('button', {
                                 key: `${documentItem.name}-${index}`,
-                                onClick: () => onSelectPdf(index),
+                                onClick: () => onSelectDocument(index),
                                 className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${index === safeIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`,
                                 title: documentItem.name
                             }, documentItem.name)
@@ -1341,7 +1457,7 @@
                 ),
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                     h('h3', { className: "text-sm sm:text-base font-bold text-gray-800 mb-4 break-words" }, activeDocument.name),
-                    h(PdfViewer, { url: activeDocument.url })
+                    h(DocumentViewer, { documentItem: activeDocument })
                 )
             );
         };
@@ -1403,18 +1519,18 @@
             const [showSettings, setShowSettings] = useState(false);
             const [selectedColumns, setSelectedColumns] = useState([]);
             const [selectedPage, setSelectedPage] = useState('summary');
-            const [pdfDocuments, setPdfDocuments] = useState([]);
-            const [selectedPdfIndex, setSelectedPdfIndex] = useState(0);
+            const [documents, setDocuments] = useState([]);
+            const [selectedDocumentIndex, setSelectedDocumentIndex] = useState(0);
 
             useEffect(() => {
                 return () => {
-                    pdfDocuments.forEach((documentItem) => {
+                    documents.forEach((documentItem) => {
                         if (documentItem?.url) {
                             URL.revokeObjectURL(documentItem.url);
                         }
                     });
                 };
-            }, [pdfDocuments]);
+            }, [documents]);
 
             /**
              * Handles file upload and processing.
@@ -1426,37 +1542,22 @@
                 if (!selectedFile) return;
 
                 try {
-                    const { routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, pdfFiles } = await readBackupFilesFromArchive(selectedFile);
+                    const { routesBackupText, flightBackupText, crewMembersBackupText, documentFiles } = await readBackupFilesFromArchive(selectedFile);
                     const processedRoute = processFlightData(routesBackupText);
                     const processedSummary = processFlightSummaryData(flightBackupText);
                     const processedCrew = crewMembersBackupText ? JSON.parse(crewMembersBackupText) : null;
-                    const documentMetadata = processDocumentMetadata(documentsBackupText);
-                    const pdfFileMap = new Map(
-                        pdfFiles.map((pdfFile) => [pdfFile.name.toLowerCase(), pdfFile])
-                    );
-                    const metadataDrivenPdfDocuments = documentMetadata
-                        .map((documentItem) => {
-                            const matchingPdf = pdfFileMap.get(documentItem.filename.toLowerCase());
-                            if (!matchingPdf) return null;
-
-                            return {
-                                name: documentItem.filename,
-                                url: URL.createObjectURL(matchingPdf.blob)
-                            };
-                        })
-                        .filter(Boolean);
-                    const mappedPdfDocuments = metadataDrivenPdfDocuments.length > 0
-                        ? metadataDrivenPdfDocuments
-                        : pdfFiles.map((pdfFile) => ({
-                            name: pdfFile.name,
-                            url: URL.createObjectURL(pdfFile.blob)
-                        }));
+                    const mappedDocuments = documentFiles.map((documentItem) => ({
+                        name: documentItem.name,
+                        extension: documentItem.extension,
+                        textContent: documentItem.textContent,
+                        url: URL.createObjectURL(documentItem.blob)
+                    }));
 
                     setRouteData(processedRoute);
                     setFlightSummaryData(processedSummary);
                     setCrewMembersData(Array.isArray(processedCrew) ? processedCrew : null);
-                    setPdfDocuments(mappedPdfDocuments);
-                    setSelectedPdfIndex(0);
+                    setDocuments(mappedDocuments);
+                    setSelectedDocumentIndex(0);
                     setSelectedPage('summary');
                     setErrorMessage(null);
                 } catch (processingError) {
@@ -1527,7 +1628,7 @@
                             h('div', { className: "border-t border-gray-100 my-3" }),
 
                             h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Documents"),
-                            h('p', { className: "text-xs text-gray-400 mb-3" }, "Select PDFs directly on the Documents tab"),
+                            h('p', { className: "text-xs text-gray-400 mb-3" }, "Select documents directly on the Documents tab"),
 
                             h('div', { className: "border-t border-gray-100 my-3" }),
 
@@ -1560,8 +1661,8 @@
                                     setRouteData(null);
                                     setFlightSummaryData(null);
                                     setCrewMembersData(null);
-                                    setPdfDocuments([]);
-                                    setSelectedPdfIndex(0);
+                                    setDocuments([]);
+                                    setSelectedDocumentIndex(0);
                                 },
                                 className: "w-full text-left text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
                             }, "Close Flight")
@@ -1593,10 +1694,10 @@
                         )
                     )
                     : selectedPage === 'documents'
-                        ? h(PdfDocumentsPage, {
-                            pdfDocuments,
-                            selectedPdfIndex,
-                            onSelectPdf: setSelectedPdfIndex
+                        ? h(DocumentsPage, {
+                            documents,
+                            selectedDocumentIndex,
+                            onSelectDocument: setSelectedDocumentIndex
                         })
                         : h(FlightSummaryPage, { summary: flightSummaryData, crewMembers: crewMembersData })
             );
