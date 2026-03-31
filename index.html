@@ -1590,14 +1590,49 @@
 
             const safeIndex = Math.min(Math.max(selectedDocumentIndex || 0, 0), documents.length - 1);
             const activeDocument = documents[safeIndex];
-            const isFirstDocument = safeIndex === 0;
-            const isLastDocument = safeIndex === documents.length - 1;
+            
+            // Group documents by file type and sort by name within groups
+            const groupedDocuments = documents.reduce((acc, doc, index) => {
+                const extension = doc.extension || 'other';
+                if (!acc[extension]) {
+                    acc[extension] = [];
+                }
+                acc[extension].push({ doc, index });
+                return acc;
+            }, {});
+
+            // Sort groups by extension name, and sort documents within each group by name
+            const sortedGroups = Object.entries(groupedDocuments)
+                .sort(([extA], [extB]) => extA.localeCompare(extB))
+                .map(([ext, items]) => [ext, items.sort((a, b) => a.doc.name.localeCompare(b.doc.name))]);
+
+            // Create a flat array of sorted indices for navigation
+            const sortedIndices = sortedGroups.flatMap(([_, items]) => items.map(({ index }) => index));
+
+            // Find current position in the sorted order
+            const currentSortedPosition = sortedIndices.indexOf(safeIndex);
+            const isFirstInSortedOrder = currentSortedPosition === 0;
+            const isLastInSortedOrder = currentSortedPosition === sortedIndices.length - 1;
 
             const handleSelectDocument = (targetIndex) => {
                 const clampedIndex = Math.min(Math.max(targetIndex, 0), documents.length - 1);
                 if (clampedIndex === safeIndex) return;
                 onSelectDocument(clampedIndex);
             };
+
+            const handleNavigateNext = () => {
+                if (currentSortedPosition < sortedIndices.length - 1) {
+                    onSelectDocument(sortedIndices[currentSortedPosition + 1]);
+                }
+            };
+
+            const handleNavigatePrev = () => {
+                if (currentSortedPosition > 0) {
+                    onSelectDocument(sortedIndices[currentSortedPosition - 1]);
+                }
+            };
+
+
 
             return h('div', { className: "space-y-4" },
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
@@ -1609,15 +1644,22 @@
                         h('h3', { className: "text-sm font-bold text-gray-800" }, `All Documents (${documents.length})`),
                         h('span', { className: `text-gray-400 text-lg transition-transform ${isListExpanded ? 'rotate-180' : ''}` }, '▼')
                     ),
-                    isListExpanded && h('div', { className: "flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100" },
-                        documents.map((documentItem, index) =>
-                            h('button', {
-                                key: `${documentItem.name}-${index}`,
-                                type: 'button',
-                                onClick: () => handleSelectDocument(index),
-                                className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${index === safeIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`,
-                                title: documentItem.name
-                            }, documentItem.name)
+                    isListExpanded && h('div', { className: "mt-3 pt-3 border-t border-gray-100 space-y-4" },
+                        sortedGroups.map(([extension, items]) =>
+                            h('div', { key: extension },
+                                h('h4', { className: "text-xs uppercase font-bold text-gray-400 tracking-wider mb-2" }, extension.toUpperCase()),
+                                h('div', { className: "flex flex-wrap gap-2" },
+                                    items.map(({ doc, index }) =>
+                                        h('button', {
+                                            key: `${doc.name}-${index}`,
+                                            type: 'button',
+                                            onClick: () => handleSelectDocument(index),
+                                            className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${index === safeIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`,
+                                            title: doc.name
+                                        }, doc.name)
+                                    )
+                                )
+                            )
                         )
                     )
                 ),
@@ -1626,17 +1668,17 @@
                     h('div', { className: "flex items-center gap-2 mb-4" },
                         h('button', {
                             type: 'button',
-                            onClick: () => handleSelectDocument(safeIndex - 1),
-                            disabled: isFirstDocument,
-                            className: `h-9 w-9 rounded-full text-lg font-black transition ${isFirstDocument ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                            onClick: handleNavigatePrev,
+                            disabled: isFirstInSortedOrder,
+                            className: `h-9 w-9 rounded-full text-lg font-black transition ${isFirstInSortedOrder ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
                             title: 'Previous document',
                             'aria-label': 'Previous document'
                         }, '←'),
                         h('button', {
                             type: 'button',
-                            onClick: () => handleSelectDocument(safeIndex + 1),
-                            disabled: isLastDocument,
-                            className: `h-9 w-9 rounded-full text-lg font-black transition ${isLastDocument ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                            onClick: handleNavigateNext,
+                            disabled: isLastInSortedOrder,
+                            className: `h-9 w-9 rounded-full text-lg font-black transition ${isLastInSortedOrder ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
                             title: 'Next document',
                             'aria-label': 'Next document'
                         }, '→'),
