@@ -357,12 +357,14 @@
             }
 
             const flightEntry = zipArchive.file('flight.backup');
+            const crewMembersEntry = zipArchive.file('crewMembers.backup');
             const pdfEntries = Object.values(zipArchive.files)
                 .filter((archiveEntry) => !archiveEntry.dir && /\.pdf$/i.test(archiveEntry.name));
 
-            const [routesBackupText, flightBackupText, pdfBlobs] = await Promise.all([
+            const [routesBackupText, flightBackupText, crewMembersBackupText, pdfBlobs] = await Promise.all([
                 routesEntry.async('string'),
                 flightEntry ? flightEntry.async('string') : Promise.resolve(null),
+                crewMembersEntry ? crewMembersEntry.async('string') : Promise.resolve(null),
                 Promise.all(pdfEntries.map((pdfEntry) => pdfEntry.async('blob')))
             ]);
 
@@ -378,7 +380,7 @@
                 };
             });
 
-            return { routesBackupText, flightBackupText, pdfFiles };
+            return { routesBackupText, flightBackupText, crewMembersBackupText, pdfFiles };
         };
 
         /**
@@ -1002,7 +1004,7 @@
          * @param {Object} props - Component properties
          * @param {Object|null} props.summary - Parsed flight backup object
          */
-        const FlightSummaryPage = ({ summary }) => {
+        const FlightSummaryPage = ({ summary, crewMembers }) => {
             if (!summary) {
                 return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
                     h('h3', { className: "text-lg font-bold mb-2" }, "Flight Summary"),
@@ -1049,6 +1051,11 @@
             const formatAirportAndRunway = (airport, runway) => {
                 const airportCode = airport?.icaoCode || airport?.iataCode || "-";
                 return `${airportCode}${runway ? ` ${runway}` : ''}`;
+            };
+
+            const formatCrewFunction = (fn) => {
+                if (!fn) return '-';
+                return fn.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
             };
 
             const summaryInfo = summary.summaryAdditionalInfo || {};
@@ -1149,6 +1156,19 @@
                     h('pre', {
                         className: "whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed text-gray-700 bg-gray-50 rounded-2xl p-4 overflow-x-auto font-mono"
                     }, melCdlRemarksText)
+                ),
+
+                crewMembers && crewMembers.length > 0 && h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6 uppercase" }, "Crew"),
+                    h('div', { className: "space-y-1" },
+                        crewMembers.map((member) =>
+                            h(SummaryRow, {
+                                key: member.userId || member.employeeId,
+                                label: formatCrewFunction(member.function),
+                                value: `${member.firstName} ${member.lastName}${member.employeeId ? `  -  ${member.employeeId}` : ''}`
+                            })
+                        )
+                    )
                 )
             );
         };
@@ -1346,6 +1366,7 @@
             // Application state
             const [routeData, setRouteData] = useState(null);
             const [flightSummaryData, setFlightSummaryData] = useState(null);
+            const [crewMembersData, setCrewMembersData] = useState(null);
             const [errorMessage, setErrorMessage] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
             const [selectedColumns, setSelectedColumns] = useState([]);
@@ -1373,9 +1394,10 @@
                 if (!selectedFile) return;
 
                 try {
-                    const { routesBackupText, flightBackupText, pdfFiles } = await readBackupFilesFromArchive(selectedFile);
+                    const { routesBackupText, flightBackupText, crewMembersBackupText, pdfFiles } = await readBackupFilesFromArchive(selectedFile);
                     const processedRoute = processFlightData(routesBackupText);
                     const processedSummary = processFlightSummaryData(flightBackupText);
+                    const processedCrew = crewMembersBackupText ? JSON.parse(crewMembersBackupText) : null;
                     const mappedPdfDocuments = pdfFiles.map((pdfFile) => ({
                         name: pdfFile.name,
                         url: URL.createObjectURL(pdfFile.blob)
@@ -1383,6 +1405,7 @@
 
                     setRouteData(processedRoute);
                     setFlightSummaryData(processedSummary);
+                    setCrewMembersData(Array.isArray(processedCrew) ? processedCrew : null);
                     setPdfDocuments(mappedPdfDocuments);
                     setSelectedPdfIndex(0);
                     setSelectedPage('summary');
@@ -1487,6 +1510,7 @@
                                     setShowSettings(false);
                                     setRouteData(null);
                                     setFlightSummaryData(null);
+                                    setCrewMembersData(null);
                                     setPdfDocuments([]);
                                     setSelectedPdfIndex(0);
                                 },
@@ -1525,7 +1549,7 @@
                             selectedPdfIndex,
                             onSelectPdf: setSelectedPdfIndex
                         })
-                        : h(FlightSummaryPage, { summary: flightSummaryData })
+                        : h(FlightSummaryPage, { summary: flightSummaryData, crewMembers: crewMembersData })
             );
         };
 
