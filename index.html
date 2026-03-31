@@ -1596,17 +1596,7 @@
             const handleSelectDocument = (targetIndex) => {
                 const clampedIndex = Math.min(Math.max(targetIndex, 0), documents.length - 1);
                 if (clampedIndex === safeIndex) return;
-
-                const currentScrollY = window.scrollY;
                 onSelectDocument(clampedIndex);
-
-                // Keep viewport stable even when switching between viewer types (e.g. GIF <-> PDF).
-                requestAnimationFrame(() => {
-                    window.scrollTo({ top: currentScrollY, left: 0, behavior: 'auto' });
-                });
-                setTimeout(() => {
-                    window.scrollTo({ top: currentScrollY, left: 0, behavior: 'auto' });
-                }, 120);
             };
 
             return h('div', { className: "space-y-4" },
