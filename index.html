@@ -1163,19 +1163,28 @@
              * @param {boolean} invertDiffColor - Pass true for fuel remaining, where a
              *   positive diff is beneficial (more fuel on board than planned)
              */
-            const renderPlannedWithDiff = (plannedValue, difference, unit = "", invertDiffColor = false) => {
+            const renderPlannedWithDiff = (plannedValue, actualValue, difference, unit = "", invertDiffColor = false) => {
                 if (difference === null || difference === undefined || isNaN(difference)) {
-                    return plannedValue;
+                    return actualValue || plannedValue;
                 }
 
                 const colorTarget = invertDiffColor ? -difference : difference;
                 return h('span', null,
-                    plannedValue,
+                    actualValue || plannedValue,
                     h('span', {
                         className: "font-bold text-[10px] " + getDifferenceColor(colorTarget)
                     }, ` (${formatDiff(difference, unit)})`)
                 );
             };
+
+            const fuelUnit = String(waypoint?.fuel?.unit || '').toUpperCase();
+            const actualTimeDisplay = actualData.time ? `${actualData.time}Z` : null;
+            const actualUsedDisplay = actualData.used !== ""
+                ? `${actualData.used} ${fuelUnit}`.trim()
+                : null;
+            const actualRemainingDisplay = actualData.remaining !== ""
+                ? `${actualData.remaining} ${fuelUnit}`.trim()
+                : null;
 
             // Calculate grid layout based on selected columns
             const baseColumnCount = 3; // Time + Used + Remaining
@@ -1235,13 +1244,13 @@
                         // Value Row (planned values with inline diff when actual exists)
                         h('div', { className: "contents" },
                             h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
-                                renderPlannedWithDiff(plannedTimeStr, timeDifference, "min")
+                                renderPlannedWithDiff(plannedTimeStr, actualTimeDisplay, timeDifference, "min")
                             ),
                             fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
-                                renderPlannedWithDiff(fuelData.cumulated, fuelUsedDifference)
+                                renderPlannedWithDiff(fuelData.cumulated, actualUsedDisplay, fuelUsedDifference)
                             ),
                             fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
-                                renderPlannedWithDiff(fuelData.remaining, fuelRemainingDifference, "", true)
+                                renderPlannedWithDiff(fuelData.remaining, actualRemainingDisplay, fuelRemainingDifference, "", true)
                             ),
                             selectedColumns.map(col => h('div', {
                                 key: col,
@@ -1476,17 +1485,22 @@
                 return difference > 0 ? "text-red-500" : "text-emerald-500";
             };
 
-            const renderPlannedWithDiff = (plannedValue, difference, unit = "", invertDiffColor = false) => {
+            const renderPlannedWithDiff = (plannedValue, actualValue, difference, unit = "", invertDiffColor = false) => {
                 if (difference === null || difference === undefined || isNaN(difference)) {
-                    return plannedValue;
+                    return actualValue || plannedValue;
                 }
 
                 const colorTarget = invertDiffColor ? -difference : difference;
                 return h('span', null,
-                    plannedValue,
+                    actualValue || plannedValue,
                     h('span', { className: "font-bold text-[10px] " + getDifferenceColor(colorTarget) }, ` (${formatDiff(difference, unit)})`)
                 );
             };
+
+            const actualTimeDisplay = actualData.time ? `${actualData.time}Z` : null;
+            const actualRemainingDisplay = actualData.remaining !== ""
+                ? `${actualData.remaining} ${remainingUnit}`.trim()
+                : null;
 
             return h('div', { className: "rounded-[2rem] border border-sky-60 bg-gradient-to-br from-sky-30 via-cyan-30 to-white p-3 sm:p-5 shadow-sm space-y-3" },
                 h('div', { className: "px-1 flex items-center justify-between gap-3" },
@@ -1510,10 +1524,10 @@
                             ),
                             h('div', { className: "contents" },
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedTime, timeDifference, "min")
+                                    renderPlannedWithDiff(plannedTime, actualTimeDisplay, timeDifference, "min")
                                 ),
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedRemainingDisplay, remainingDifference, remainingUnit, true)
+                                    renderPlannedWithDiff(plannedRemainingDisplay, actualRemainingDisplay, remainingDifference, remainingUnit, true)
                                 )
                             )
                         )
@@ -1834,17 +1848,25 @@
                 return difference > 0 ? "text-red-500" : "text-emerald-500";
             };
 
-            const renderPlannedWithDiff = (plannedValue, difference, unit = "", invertDiffColor = false) => {
+            const renderPlannedWithDiff = (plannedValue, actualValue, difference, unit = "", invertDiffColor = false) => {
                 if (difference === null || difference === undefined || isNaN(difference)) {
-                    return plannedValue;
+                    return actualValue || plannedValue;
                 }
 
                 const colorTarget = invertDiffColor ? -difference : difference;
                 return h('span', null,
-                    plannedValue,
+                    actualValue || plannedValue,
                     h('span', { className: "font-bold text-[10px] " + getDifferenceColor(colorTarget) }, ` (${formatDiff(difference, unit)})`)
                 );
             };
+
+            const actualTimeDisplay = actualData.time ? `${actualData.time}Z` : null;
+            const actualUsedDisplay = actualData.used !== ""
+                ? `${actualData.used} ${usedUnit}`.trim()
+                : null;
+            const actualRemainingDisplay = actualData.remaining !== ""
+                ? `${actualData.remaining} ${remainingUnit}`.trim()
+                : null;
 
             return h('div', { className: "rounded-[2rem] border border-sky-60 bg-gradient-to-br from-sky-30 via-cyan-30 to-white p-3 sm:p-5 shadow-sm space-y-3" },
                 h('div', { className: "px-1 flex items-center justify-between gap-3" },
@@ -1869,13 +1891,13 @@
                             ),
                             h('div', { className: "contents" },
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedTime, timeDifference, "min")
+                                    renderPlannedWithDiff(plannedTime, actualTimeDisplay, timeDifference, "min")
                                 ),
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedUsedDisplay, usedDifference, usedUnit)
+                                    renderPlannedWithDiff(plannedUsedDisplay, actualUsedDisplay, usedDifference, usedUnit)
                                 ),
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedRemainingDisplay, remainingDifference, remainingUnit, true)
+                                    renderPlannedWithDiff(plannedRemainingDisplay, actualRemainingDisplay, remainingDifference, remainingUnit, true)
                                 )
                             )
                         )
