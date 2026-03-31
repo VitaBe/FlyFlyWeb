@@ -331,12 +331,12 @@
         };
 
         /**
-         * Extracts the routes.backup JSON payload from a ZIP-compatible archive.
+         * Extracts routes.backup and flight.backup JSON payloads from a ZIP-compatible archive.
          * @param {File} uploadedFile - User-selected archive file.
-         * @returns {Promise<string>} Raw JSON text from routes.backup.
+         * @returns {Promise<{routesBackupText: string, flightBackupText: string|null}>}
          * @throws {Error} If archive cannot be read or routes.backup is missing.
          */
-        const readRoutesBackupFromArchive = async (uploadedFile) => {
+        const readBackupFilesFromArchive = async (uploadedFile) => {
             if (!window.JSZip) {
                 throw new Error("ZIP library failed to load. Please refresh and try again.");
             }
@@ -349,12 +349,48 @@
                 throw new Error("Invalid archive file. Please upload a ZIP/.effarchive export.");
             }
 
-            const backupEntry = zipArchive.file('routes.backup');
-            if (!backupEntry) {
+            const routesEntry = zipArchive.file('routes.backup');
+            if (!routesEntry) {
                 throw new Error("The archive does not contain routes.backup.");
             }
 
-            return backupEntry.async('string');
+            const flightEntry = zipArchive.file('flight.backup');
+
+            const [routesBackupText, flightBackupText] = await Promise.all([
+                routesEntry.async('string'),
+                flightEntry ? flightEntry.async('string') : Promise.resolve(null)
+            ]);
+
+            return { routesBackupText, flightBackupText };
+        };
+
+        /**
+         * Parses flight.backup JSON payload used for the Flight Summary tab.
+         * @param {string|null} jsonText - Raw JSON string from flight.backup.
+         * @returns {Object|null} Parsed summary object or null when unavailable.
+         */
+        const processFlightSummaryData = (jsonText) => {
+            if (!jsonText) return null;
+            const parsedData = JSON.parse(jsonText);
+            return parsedData && typeof parsedData === 'object' ? parsedData : null;
+        };
+
+        /**
+         * Converts an ISO-8601 duration (PTxHxMxS) to minutes.
+         * @param {string} duration - ISO duration string.
+         * @returns {number|null} Total minutes or null if invalid.
+         */
+        const parseDurationToMinutes = (duration) => {
+            if (!duration || typeof duration !== 'string') return null;
+
+            const durationMatch = duration.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+            if (!durationMatch) return null;
+
+            const hours = Number(durationMatch[1] || 0);
+            const minutes = Number(durationMatch[2] || 0);
+            const seconds = Number(durationMatch[3] || 0);
+
+            return hours * 60 + minutes + Math.round(seconds / 60);
         };
 
         // ==========================================
@@ -407,7 +443,7 @@
                 h('div', { className: "bg-white p-6 sm:p-12 rounded-3xl sm:rounded-[3rem] shadow-xl animate-in w-full max-w-sm sm:max-w-md" },
                     h(Icon, { name: "upload", className: "w-12 h-12 sm:w-16 sm:h-16 text-blue-600 mx-auto mb-4 sm:mb-6" }),
                     h('h1', { className: "text-2xl sm:text-3xl font-black mb-3 sm:mb-4" }, "FlightLog Pro"),
-                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload a ZIP/.effarchive export containing routes.backup"),
+                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload a ZIP/.effarchive export containing routes.backup and flight.backup"),
                     h('label', {
                         className: "bg-blue-600 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-bold cursor-pointer hover:bg-blue-700 transition-all block"
                     },
@@ -845,6 +881,123 @@
             );
         };
 
+        /**
+         * FlightSummaryPage - Displays high-level flight plan details from flight.backup.
+         * Uses the app's existing card and typography design language.
+         *
+         * @param {Object} props - Component properties
+         * @param {Object|null} props.summary - Parsed flight backup object
+         */
+        const FlightSummaryPage = ({ summary }) => {
+            if (!summary) {
+                return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
+                    h('h3', { className: "text-lg font-bold mb-2" }, "Flight Summary"),
+                    h('p', null, "No flight.backup data found in this archive.")
+                );
+            }
+
+            const formatValueWithUnit = (valueWithUnit) => {
+                if (!valueWithUnit || valueWithUnit.value === undefined) return "-";
+                const formattedValue = formatNumber(valueWithUnit.value);
+                const rawUnit = valueWithUnit.unit || '';
+
+                if (rawUnit.toLowerCase() === 'c') {
+                    return `${formattedValue}°`;
+                }
+
+                return formatUnit(rawUnit, formattedValue);
+            };
+
+            const formatFlightLevel = (valueWithUnit) => {
+                if (!valueWithUnit || valueWithUnit.value === undefined) return "-";
+                return `FL${formatNumber(valueWithUnit.value)}`;
+            };
+
+            const formatSignedPercent = (valueWithUnit) => {
+                if (!valueWithUnit || valueWithUnit.value === undefined) return "-";
+                const numericValue = Number(valueWithUnit.value);
+                if (isNaN(numericValue)) return "-";
+                const sign = numericValue > 0 ? '+' : '';
+                return `${sign}${numericValue} %`;
+            };
+
+            const formatAverageWind = (windData) => {
+                if (!windData || windData.value === undefined) return "-";
+                const numericValue = Number(windData.value);
+                if (isNaN(numericValue)) return "-";
+
+                const windPrefix = numericValue < 0 ? 'H' : 'T';
+                const windMagnitude = String(Math.abs(Math.round(numericValue))).padStart(3, '0');
+                const unit = String(windData.unit || 'kt').toUpperCase();
+                return `${windPrefix}${windMagnitude} ${unit}`;
+            };
+
+            const formatAirportAndRunway = (airport, runway) => {
+                const airportCode = airport?.icaoCode || airport?.iataCode || "-";
+                return `${airportCode}${runway ? ` ${runway}` : ''}`;
+            };
+
+            const summaryInfo = summary.summaryAdditionalInfo || {};
+            const etopsMinutes = parseDurationToMinutes(summaryInfo.diversion);
+
+            const rowsLeft = [
+                { label: 'AC type', value: summary.acType || '-' },
+                { label: 'Callsign', value: summary.atcCallsign || '-' },
+                { label: 'Departure airport', value: formatAirportAndRunway(summary.originAirport, summary.runways?.departure) },
+                { label: 'Mach', value: summary.machString || '-' },
+                { label: 'Ground distance', value: formatValueWithUnit(summary.groundDistance) },
+                { label: 'TOC FL', value: formatFlightLevel(summary.TOC_FL) },
+                { label: 'TOC-TOD avg. wind', value: formatAverageWind(summary.averageWind) },
+                { label: 'Arrival airport', value: formatAirportAndRunway(summary.destinationAirport, summary.runways?.destination) }
+            ];
+
+            const rowsRight = [
+                { label: 'Registration', value: summary.aircraftId || '-' },
+                { label: 'Fuel flow factor', value: formatSignedPercent(summary.fuelFlowFactor) },
+                { label: 'SID', value: summary.SID || '-' },
+                { label: 'Cost index (CI)', value: summary.costIndex !== undefined ? `CI ${summary.costIndex}` : '-' },
+                { label: 'Air distance', value: formatValueWithUnit(summary.airDistance) },
+                { label: 'TOC tropopause', value: formatFlightLevel(summary.tropopauseFL) },
+                { label: 'TOC OAT', value: formatValueWithUnit(summary.OAT) },
+                { label: 'STAR', value: summary.STAR || '-' }
+            ];
+
+            const bottomLeft = [
+                { label: 'Take off alternate', value: summaryInfo.takeOffAlternate || summaryInfo.takeoffAlternate || '-' },
+                { label: 'Max. ETOPS diversion time', value: etopsMinutes !== null ? `${etopsMinutes} min` : '-' },
+                { label: 'Dispatcher', value: summaryInfo.dispatcherName || '-' }
+            ];
+
+            const bottomRight = [
+                { label: 'Destination Alternate', value: summaryInfo.destinationAlternate || '-' },
+                { label: 'ETOPS Alternates', value: Array.isArray(summaryInfo.alternates) && summaryInfo.alternates.length > 0 ? summaryInfo.alternates.join('   ') : '-' }
+            ];
+
+            const SummaryRow = ({ label, value }) => h('div', { className: "grid grid-cols-[minmax(150px,1fr)_minmax(120px,1fr)] gap-3 sm:gap-6 py-1.5" },
+                h('p', { className: "text-gray-400 font-medium text-base sm:text-lg" }, label),
+                h('p', { className: "text-gray-700 font-extrabold text-base sm:text-2xl leading-tight" }, value)
+            );
+
+            return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                h('div', { className: "flex items-center gap-3 mb-4 sm:mb-6" },
+                    h('h3', { className: "text-xl sm:text-3xl font-black text-gray-800" }, "Flight Plan Summary"),
+                    summaryInfo.isETOPS && h('span', { className: "px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 tracking-wide" }, "ETOPS")
+                ),
+
+                h('div', { className: "grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-10" },
+                    h('div', { className: "space-y-1" }, rowsLeft.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value }))),
+                    h('div', { className: "space-y-1" }, rowsRight.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value })))
+                ),
+
+                h('div', { className: "border-t border-gray-200 my-6 sm:my-8" }),
+
+                h('div', { className: "grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-10" },
+                    h('div', { className: "space-y-1" }, bottomLeft.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value }))),
+                    h('div', { className: "space-y-1" }, bottomRight.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value })))
+                )
+            );
+        };
+
         // ==========================================
         // COLUMN CONFIGURATION
         // ==========================================
@@ -896,6 +1049,7 @@
         const App = () => {
             // Application state
             const [routeData, setRouteData] = useState(null);
+            const [flightSummaryData, setFlightSummaryData] = useState(null);
             const [errorMessage, setErrorMessage] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
             const [selectedColumns, setSelectedColumns] = useState([]);
@@ -911,10 +1065,12 @@
                 if (!selectedFile) return;
 
                 try {
-                    const backupJsonText = await readRoutesBackupFromArchive(selectedFile);
-                    const processedRoute = processFlightData(backupJsonText);
+                    const { routesBackupText, flightBackupText } = await readBackupFilesFromArchive(selectedFile);
+                    const processedRoute = processFlightData(routesBackupText);
+                    const processedSummary = processFlightSummaryData(flightBackupText);
 
                     setRouteData(processedRoute);
+                    setFlightSummaryData(processedSummary);
                     setErrorMessage(null);
                 } catch (processingError) {
                     setErrorMessage("Error loading file: " + processingError.message);
@@ -962,7 +1118,10 @@
                 // Route header with destination info and controls
                 h(RouteHeader, {
                     route: routeData,
-                    onClose: () => setRouteData(null),
+                    onClose: () => {
+                        setRouteData(null);
+                        setFlightSummaryData(null);
+                    },
                     onSettingsToggle: () => setShowSettings(!showSettings)
                 }),
 
@@ -1000,10 +1159,7 @@
                             })
                         )
                     )
-                    : h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
-                        h('h3', { className: "text-lg font-bold mb-2" }, "Summary"),
-                        h('p', null, "Summary content will be available here soon.")
-                    )
+                    : h(FlightSummaryPage, { summary: flightSummaryData })
             );
         };
 
