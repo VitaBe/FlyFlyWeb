@@ -15,12 +15,13 @@ The application is built as a **Single File Application (SFA)**, meaning all log
 * **Aviation Metrics Visualization:** Extracts and formats specific aviation data displayed in WaypointCard rows:  
   * **Base Columns (Always Display):** Waypoint title, planned time (HH:MM), fuel used, and fuel remaining.  
   * **Waypoint Detail Popup:** Clicking a waypoint title opens a modal with full waypoint details and all non-empty STATIC_COLUMNS values.
-  * **Shared Actual Inputs:** The modal includes the same Actual row controls (time, fuel used, fuel remaining with ▲/▼ steppers). Values are synchronized with the waypoint card in real time.
+  * **Shared Actual Inputs:** The modal contains the ACTUAL controls (time, fuel used, fuel remaining with ▲/▼ steppers). Values are synchronized with the waypoint card in real time.
   * **Dynamic Column Selection:** Users can toggle 19 additional fields via the Settings panel (gear icon):
     * Flight Parameters: Tropopause, Indicated Air Speed, Temperature, Wind Shear, Wind Component
     * Navigation: Ground Distance, Latitude, Longitude, Track data (segment & outbound in true/magnetic)
     * Averages: Wind Speed, Minimum Safe Altitude, Ground Speed, Mach Speed, True Air Speed, ISA Deviation, Altitude
-  * **Actual vs. Planned Comparison:** Inline input fields for actual flight data with real-time difference calculations (color-coded: green for better, red for worse).  
+  * **Compact OFP Card Display:** The card shows planned values with inline diff in parentheses, e.g. `10:40Z (+3 min)`, `2930 KG (-100 KG)`, `44212 KG (+100 KG)`.
+  * **Diff Color Coding:** Parenthesized diff is color-coded `green` for beneficial, `red` for adverse, and `blue` when diff is zero.
   * **Unit Normalization:** Automatically formats units (e.g., degrees to °, fuel to kg/lbs).
 
 ## **Technical Architecture**
@@ -117,11 +118,14 @@ The app expects a JSON array or object containing:
 2. **View Flight Plan:** The application displays waypoints in chronological order with base columns (Time, Used Fuel, Remaining Fuel).
 3. **Configure Columns:** Click the **Settings (gear) icon** in the top-right to open the Column Settings panel.
 4. **Toggle Fields:** Check/uncheck any of the 19 available fields to add or remove columns from the waypoint grid (all default to hidden).
-5. **Enter Actual Data:** For each waypoint, input actual flight times and fuel values in the blue input fields. The "Diff" row automatically calculates and color-codes the variance:
-   - **Green** = Performance exceeded expectation (less fuel used, earlier arrival)
-   - **Red** = Performance below expectation (more fuel used, later arrival)
-6. **Open Waypoint Popup:** Click a waypoint title to open the detail popup. You can edit ACTUAL time/fuel there with the same steppers, and values stay synced with the OFP card.
-7. **Close Flight:** Click the "Close" button to reset and upload a new file.
+5. **Open Waypoint Popup:** Click a waypoint title to open the detail popup.
+6. **Enter Actual Data:** In the popup, edit actual flight times and fuel values with the blue inputs and steppers.
+7. **Review Compact Diff in OFP Card:** The card shows planned values with inline diff in parentheses:
+  - **Green** = Beneficial deviation
+  - **Red** = Adverse deviation
+  - **Blue** = No deviation (zero diff)
+8. **Close Popup / Continue:** Close the popup to keep reviewing the OFP cards with synchronized values.
+9. **Close Flight:** Click the "Close" button to reset and upload a new file.
 
 ## **How to Run**
 

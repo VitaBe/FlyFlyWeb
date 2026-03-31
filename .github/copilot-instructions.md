@@ -40,7 +40,7 @@ h('div', { className: "..." }, h(MyComponent, { prop: value }))
 | `Icon` | SVG icons from inline `iconPaths` map |
 | `WelcomeScreen` | Upload screen, shown before any archive is loaded |
 | `RouteHeader` | Flight identification header (callsign, times, flight time) |
-| `WaypointCard` | One card per waypoint: Planned / Actual / Diff rows with editable inputs |
+| `WaypointCard` | One card per waypoint: compact planned values with inline diff in parentheses |
 | `WaypointDetailModal` | Waypoint popup: full details + editable Planned/Actual/Diff controls synced with the card |
 | `FlightSummaryPage` | Summary tab: aircraft info, airports, crew, OptiClimb, ATC text, remarks |
 | `PdfViewer` | Renders multi-page PDFs via PDF.js onto canvas elements |
@@ -115,13 +115,14 @@ Wrap new row grids in: `h('div', { className: "contents" }, ...)` inside a CSS g
 
 ### Diff coloring convention
 
-- ` getDifferenceColor(diff)` returns `text-red-500` for positive, `text-emerald-500` for negative, `text-gray-400` for zero.
+- `getDifferenceColor(diff)` returns `text-red-500` for positive, `text-emerald-500` for negative, `text-blue-500` for zero.
 - For fuel remaining, negate the sign: `getDifferenceColor(-fuelRemainingDifference)` (more remaining is good).
 
 ### Waypoint popup behavior
 
 - Clicking a waypoint title opens `WaypointDetailModal`.
-- The popup includes Time / Used / Remaining Planned, Actual, and Diff fields with the same input and stepper logic as `WaypointCard`.
+- `WaypointCard` is read-only for ACTUAL entry and only shows planned values with inline diff text like `10:40Z (+3 min)`.
+- The popup contains Time / Used / Remaining Planned, Actual, and Diff fields with the ACTUAL input and stepper logic.
 - `actualData` state is owned by `WaypointCard` and passed into `WaypointDetailModal`, so edits are synchronized in both views.
 - Popup close actions: backdrop click, close button, or Escape key.
 

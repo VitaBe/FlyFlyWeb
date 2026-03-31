@@ -1103,8 +1103,22 @@
              * @returns {string} CSS class for coloring the difference
              */
             const getDifferenceColor = (difference) => {
-                if (difference === 0) return "text-gray-400";
+                if (difference === 0) return "text-blue-500";
                 return difference > 0 ? "text-red-500" : "text-emerald-500";
+            };
+
+            const renderPlannedWithDiff = (plannedValue, difference, unit = "", invertDiffColor = false) => {
+                if (difference === null || difference === undefined || isNaN(difference)) {
+                    return plannedValue;
+                }
+
+                const colorTarget = invertDiffColor ? -difference : difference;
+                return h('span', null,
+                    plannedValue,
+                    h('span', {
+                        className: "font-bold text-[10px] " + getDifferenceColor(colorTarget)
+                    }, ` (${formatDiff(difference, unit)})`)
+                );
             };
 
             // Calculate grid layout based on selected columns
@@ -1161,106 +1175,22 @@
                             }, getColumnLabel(col)))
                         ),
 
-                        // Planned Values Row
+                        // Value Row (planned values with inline diff when actual exists)
                         h('div', { className: "contents" },
-                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.label }, "Planned"),
-                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value }, plannedTimeStr),
-                            fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " font-bold text-[9px]" }, fuelData.cumulated),
-                            fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " font-bold text-[9px]" }, fuelData.remaining),
+                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.label }, "Value"),
+                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
+                                renderPlannedWithDiff(plannedTimeStr, timeDifference, "min")
+                            ),
+                            fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
+                                renderPlannedWithDiff(fuelData.cumulated, fuelUsedDifference)
+                            ),
+                            fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
+                                renderPlannedWithDiff(fuelData.remaining, fuelRemainingDifference, "", true)
+                            ),
                             selectedColumns.map(col => h('div', {
                                 key: col,
                                 className: UI_STYLES.rowHeight + " " + UI_STYLES.value
                             }, getNestedValue(waypoint, col) || "-"))
-                        ),
-
-                        // Actual Values Row (Interactive)
-                        h('div', { className: "contents" },
-                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.label + " text-blue-500" }, "Actual"),
-
-                            // Time input with increment/decrement controls
-                            h('div', { className: UI_STYLES.rowHeight + " flex gap-0.5 items-center" },
-                                h('input', {
-                                    type: 'text',
-                                    className: UI_STYLES.input,
-                                    placeholder: "HH:MM",
-                                    value: actualData.time,
-                                    onChange: (e) => {
-                                        const newValue = e.target.value;
-                                        if (actualData.time === "" && newValue !== "") {
-                                            // Pre-fill with planned time on first input
-                                            const timeWithoutZ = plannedTimeStr.split('Z')[0];
-                                            setActualData(prev => ({ ...prev, time: timeWithoutZ }));
-                                        } else {
-                                            setActualData(prev => ({ ...prev, time: newValue }));
-                                        }
-                                    }
-                                }),
-                                h('div', { className: "flex flex-row gap-0.5" },
-                                    h('button', {
-                                        onClick: decrementTime,
-                                        className: UI_STYLES.button
-                                    }, "▼"),
-                                    h('button', {
-                                        onClick: incrementTime,
-                                        className: UI_STYLES.button
-                                    }, "▲")
-                                )
-                            ),
-
-                            // Fuel used input (conditional rendering)
-                            fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " flex gap-0.5 items-center" },
-                                h('input', {
-                                    type: 'number',
-                                    className: UI_STYLES.input,
-                                    placeholder: "Used",
-                                    value: actualData.used,
-                                    onChange: handleFuelUsedChange
-                                }),
-                                h('div', { className: "flex flex-row gap-0.5" },
-                                    h('button', {
-                                        onClick: decrementFuelUsed,
-                                        className: UI_STYLES.button
-                                    }, "▼"),
-                                    h('button', {
-                                        onClick: incrementFuelUsed,
-                                        className: UI_STYLES.button
-                                    }, "▲")
-                                )
-                            ),
-
-                            // Fuel remaining input (conditional rendering)
-                            fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " flex gap-0.5 items-center" },
-                                h('input', {
-                                    type: 'number',
-                                    className: UI_STYLES.input,
-                                    placeholder: "Rem",
-                                    value: actualData.remaining,
-                                    onChange: handleFuelRemainingChange
-                                }),
-                                h('div', { className: "flex flex-row gap-0.5" },
-                                    h('button', {
-                                        onClick: decrementFuelRemaining,
-                                        className: UI_STYLES.button
-                                    }, "▼"),
-                                    h('button', {
-                                        onClick: incrementFuelRemaining,
-                                        className: UI_STYLES.button
-                                    }, "▲")
-                                )
-                            ),
-
-                            // Empty cells for dynamic columns
-                            selectedColumns.map(col => h('div', { key: col, className: UI_STYLES.rowHeight }))
-                        ),
-
-                        // Difference Row
-                        h('div', { className: "contents" },
-                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.label }, "Diff"),
-                            h('div', { className: UI_STYLES.rowHeight + " font-bold text-[10px] " + getDifferenceColor(timeDifference) }, formatDiff(timeDifference, "min")),
-                            fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " font-bold text-[10px] " + getDifferenceColor(fuelUsedDifference) }, formatDiff(fuelUsedDifference)),
-                            fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " font-bold text-[10px] " + getDifferenceColor(-fuelRemainingDifference) }, formatDiff(fuelRemainingDifference)),
-                            // Empty cells for dynamic columns
-                            selectedColumns.map(col => h('div', { key: col, className: UI_STYLES.rowHeight }))
                         )
                     )
                 )
