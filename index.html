@@ -10,6 +10,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"
         crossorigin></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin></script>
+    <!-- PDF.js for in-browser PDF rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin></script>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -62,7 +64,7 @@
 
     <script>
         // Extract required hooks and functions from the global React object
-        const { useState, useEffect, createElement: h } = React;
+        const { useState, useEffect, useRef, createElement: h } = React;
 
         // ==========================================
         // CONSTANTS & CONFIGURATION
@@ -1152,8 +1154,110 @@
         };
 
         /**
+         * PdfViewer - Renders a single PDF using PDF.js onto a series of canvases.
+         * Supports all pages on all platforms including iOS Safari.
+         *
+         * @param {Object} props
+         * @param {string} props.url - Object URL of the PDF blob
+         */
+        const PdfViewer = ({ url }) => {
+            const [pages, setPages] = useState([]);
+            const [isLoading, setIsLoading] = useState(true);
+            const [loadError, setLoadError] = useState(null);
+            const renderRefs = useRef([]);
+            const renderTasks = useRef([]);
+
+            useEffect(() => {
+                if (!url) return;
+
+                setIsLoading(true);
+                setLoadError(null);
+                setPages([]);
+                renderRefs.current = [];
+                // Cancel any outstanding render tasks from previous document
+                renderTasks.current.forEach((task) => { try { task.cancel(); } catch (_) {} });
+                renderTasks.current = [];
+
+                const lib = window.pdfjsLib;
+                if (!lib) {
+                    setLoadError('PDF.js failed to load. Please refresh the page.');
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Configure worker lazily (only once)
+                if (!lib.GlobalWorkerOptions.workerSrc) {
+                    lib.GlobalWorkerOptions.workerSrc =
+                        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                }
+
+                lib.getDocument(url).promise
+                    .then((pdfDoc) => {
+                        const pageNumbers = Array.from({ length: pdfDoc.numPages }, (_, i) => i + 1);
+                        setPages(pageNumbers);
+                        setIsLoading(false);
+
+                        // Render each page after the canvases are mounted
+                        // Use a small delay to let React commit the canvas elements
+                        setTimeout(() => {
+                            pageNumbers.forEach((pageNum, idx) => {
+                                pdfDoc.getPage(pageNum).then((page) => {
+                                    const canvas = renderRefs.current[idx];
+                                    if (!canvas) return;
+
+                                    const containerWidth = canvas.parentElement
+                                        ? canvas.parentElement.clientWidth || 800
+                                        : 800;
+                                    const devicePixelRatio = window.devicePixelRatio || 1;
+                                    const baseViewport = page.getViewport({ scale: 1 });
+                                    const cssScale = containerWidth / baseViewport.width;
+                                    const renderScale = cssScale * devicePixelRatio;
+                                    const viewport = page.getViewport({ scale: renderScale });
+
+                                    // Physical canvas size matches device pixels for sharp rendering
+                                    canvas.width = viewport.width;
+                                    canvas.height = viewport.height;
+                                    // CSS size stays at logical pixels so layout is unchanged
+                                    canvas.style.width = `${viewport.width / devicePixelRatio}px`;
+                                    canvas.style.height = `${viewport.height / devicePixelRatio}px`;
+
+                                    const task = page.render({
+                                        canvasContext: canvas.getContext('2d'),
+                                        viewport
+                                    });
+                                    renderTasks.current[idx] = task;
+                                    task.promise.catch(() => {});
+                                });
+                            });
+                        }, 50);
+                    })
+                    .catch((err) => {
+                        setLoadError('Could not load PDF: ' + (err.message || 'unknown error'));
+                        setIsLoading(false);
+                    });
+            }, [url]);
+
+            if (isLoading) {
+                return h('div', { className: "flex items-center justify-center h-64 text-gray-400 font-bold text-sm" }, 'Loading PDF…');
+            }
+            if (loadError) {
+                return h('div', { className: "flex items-center justify-center h-32 text-red-500 font-bold text-sm p-4 text-center" }, loadError);
+            }
+
+            return h('div', { className: "flex flex-col gap-2" },
+                pages.map((pageNum, idx) =>
+                    h('canvas', {
+                        key: pageNum,
+                        ref: (el) => { renderRefs.current[idx] = el; },
+                        className: "w-full rounded-xl shadow-sm bg-white"
+                    })
+                )
+            );
+        };
+
+        /**
          * PdfDocumentsPage - Displays PDF documents extracted from the archive.
-         * Renders a selectable list and an embedded browser PDF viewer.
+         * Renders a selectable list and a PDF.js canvas viewer (works on iOS).
          *
          * @param {Object} props - Component properties
          * @param {Array<{name: string, url: string}>} props.pdfDocuments - Extracted PDF documents
@@ -1171,8 +1275,8 @@
             const safeIndex = Math.min(Math.max(selectedPdfIndex || 0, 0), pdfDocuments.length - 1);
             const activeDocument = pdfDocuments[safeIndex];
 
-            return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
-                h('div', { className: "flex flex-col gap-4" },
+            return h('div', { className: "space-y-4" },
+                h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                     h('div', { className: "flex flex-wrap gap-2" },
                         pdfDocuments.map((documentItem, index) =>
                             h('button', {
@@ -1182,16 +1286,10 @@
                                 title: documentItem.name
                             }, documentItem.name)
                         )
-                    ),
-                    h('div', { className: "border border-gray-200 rounded-2xl overflow-hidden bg-gray-50" },
-                        h('iframe', {
-                            key: activeDocument.url,
-                            src: activeDocument.url,
-                            title: activeDocument.name,
-                            className: "w-full h-[70vh] min-h-[480px]",
-                            loading: 'lazy'
-                        })
                     )
+                ),
+                h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h(PdfViewer, { url: activeDocument.url })
                 )
             );
         };
