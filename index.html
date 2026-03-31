@@ -77,8 +77,8 @@
             label: "text-[10px] uppercase font-bold text-gray-400 tracking-wider",
             value: "text-[10px] font-bold text-gray-700",
             rowHeight: "h-7 flex items-center",
-            input: "w-full bg-gray-50 border-none rounded px-2 py-0.5 font-bold text-[9px] text-blue-600 placeholder:text-gray-300 focus:ring-1 focus:ring-blue-100 outline-none h-7",
-            button: "px-1.5 py-0.5 bg-gray-50 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 text-[8px] font-bold leading-none transition-colors"
+            input: "w-full bg-gray-50 border-none rounded px-2 py-0.5 font-bold text-[11px] text-blue-600 placeholder:text-gray-300 focus:ring-1 focus:ring-blue-100 outline-none h-7",
+            button: "px-3 py-0.5 bg-gray-50 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 text-[8px] font-bold leading-none transition-colors"
         };
 
         // Standard step size for fuel stepper buttons (▲/▼) in the EFB fuel check workflow.
@@ -1670,7 +1670,7 @@
                             type: 'button',
                             onClick: handleNavigatePrev,
                             disabled: isFirstInSortedOrder,
-                            className: `h-9 w-9 rounded-full text-lg font-black transition ${isFirstInSortedOrder ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                            className: `h-12 w-12 sm:h-9 sm:w-9 rounded-full text-xl sm:text-lg font-black transition ${isFirstInSortedOrder ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
                             title: 'Previous document',
                             'aria-label': 'Previous document'
                         }, '←'),
@@ -1678,7 +1678,7 @@
                             type: 'button',
                             onClick: handleNavigateNext,
                             disabled: isLastInSortedOrder,
-                            className: `h-9 w-9 rounded-full text-lg font-black transition ${isLastInSortedOrder ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                            className: `h-12 w-12 sm:h-9 sm:w-9 rounded-full text-xl sm:text-lg font-black transition ${isLastInSortedOrder ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
                             title: 'Next document',
                             'aria-label': 'Next document'
                         }, '→'),
