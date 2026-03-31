@@ -81,7 +81,9 @@
             button: "px-1.5 py-0.5 bg-gray-50 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 text-[8px] font-bold leading-none transition-colors"
         };
 
-        // Fuel increment/decrement step size
+        // Standard step size for fuel stepper buttons (▲/▼) in the EFB fuel check workflow.
+        // Pilots tap up/down to adjust actual fuel values in 100-unit (KG or LBS) increments,
+        // matching typical EFB flight folder conventions.
         const FUEL_STEP = 100;
 
         // ==========================================
@@ -751,12 +753,16 @@
 
             const plannedTimeMinutes = timeToMinutes(plannedTimeStr);
             const actualTimeMinutes = timeToMinutes(actualData.time);
+            // EFB fuel check diffs — same Actual − Planned convention as WaypointCard.
+            // These drive the diff row (4th column) in the Planned / Actual / Diff grid.
             const timeDiff = (plannedTimeMinutes !== null && actualTimeMinutes !== null)
                 ? actualTimeMinutes - plannedTimeMinutes : null;
 
+            // Positive = burned more than planned (adverse → red)
             const fuelUsedDiff = (fuelData?.numCumulated !== undefined && actualData.used !== "")
                 ? Number(actualData.used) - fuelData.numCumulated : null;
 
+            // Positive = more remaining than planned (beneficial → green, colour inverted below)
             const fuelRemainingDiff = (fuelData?.numRemaining !== undefined && actualData.remaining !== "")
                 ? Number(actualData.remaining) - fuelData.numRemaining : null;
 
@@ -877,11 +883,14 @@
             const plannedTimeStr = formatTime(waypoint.passingByDate);
             const fuelData = formatFuel(waypoint.fuel);
 
-            // State for actual flight data input
+            // EFB Fuel Check: holds actual (in-flight) values entered by the pilot.
+            // Empty strings mean "not yet entered" — diffs are only computed when a value is present.
+            // This state is owned here in WaypointCard and passed down into WaypointDetailModal
+            // so both the card and the modal stay in sync.
             const [actualData, setActualData] = useState({
-                time: "",
-                used: "",
-                remaining: ""
+                time: "",       // HH:MM actual passing time (UTC)
+                used: "",       // Actual cumulative fuel used (same unit as planned)
+                remaining: ""   // Actual fuel remaining on board (same unit as planned)
             });
 
             // Controls the full-detail modal
@@ -893,19 +902,30 @@
                 remainingFocused: false
             });
 
-            // Calculate differences between planned and actual values
+            // ── EFB Fuel Check: diff = Actual − Planned ─────────────────────────────────
+            // These three differences drive the inline annotations on the card (e.g. "+3 min",
+            // "-100 KG") and the diff row inside WaypointDetailModal.
+            //
+            // Convention:  positive diff = deviation in the "bad" direction (late / overfuel used)
+            //              negative diff = deviation in the "good" direction (early / fuel saved)
+            //
+            // Exception — fuel REMAINING: a positive diff (more fuel than planned) is good,
+            // so the color is inverted when rendered (see renderPlannedWithDiff / getDifferenceColor).
+            //
+            // Diffs are null when the pilot has not yet entered an actual value, which suppresses
+            // the annotation entirely so the card stays clean until data is available.
             const plannedTimeMinutes = timeToMinutes(plannedTimeStr);
             const actualTimeMinutes = timeToMinutes(actualData.time);
             const timeDifference = (plannedTimeMinutes !== null && actualTimeMinutes !== null)
-                ? actualTimeMinutes - plannedTimeMinutes
+                ? actualTimeMinutes - plannedTimeMinutes  // positive = late, negative = early
                 : null;
 
             const fuelUsedDifference = (fuelData?.numCumulated !== undefined && actualData.used !== "")
-                ? Number(actualData.used) - fuelData.numCumulated
+                ? Number(actualData.used) - fuelData.numCumulated  // positive = more burned = adverse
                 : null;
 
             const fuelRemainingDifference = (fuelData?.numRemaining !== undefined && actualData.remaining !== "")
-                ? Number(actualData.remaining) - fuelData.numRemaining
+                ? Number(actualData.remaining) - fuelData.numRemaining  // positive = more remaining = beneficial
                 : null;
 
             // ==========================================
@@ -981,8 +1001,15 @@
             };
 
             // ==========================================
-            // FUEL INPUT HELPERS
+            // FUEL INPUT HELPERS (EFB Fuel Check)
             // ==========================================
+            // Pilots verify fuel at each waypoint by comparing planned vs actual values.
+            // These helpers handle the ▲/▼ stepper buttons and direct text-field edits.
+            //
+            // Smart first-tap behaviour: when a field is still empty, the first stepper press
+            // initialises it to the nearest FUEL_STEP boundary around the planned value
+            // (ceil for ▲, floor for ▼), so the pilot can adjust from a sensible baseline
+            // rather than from zero.  Subsequent presses simply add/subtract FUEL_STEP.
 
             /**
              * Increments fuel used by the standard step amount.
@@ -1105,11 +1132,32 @@
              * @param {number} difference - The difference value to style
              * @returns {string} CSS class for coloring the difference
              */
+            /**
+             * Maps a diff value to a Tailwind text colour for the EFB fuel check display.
+             *   positive → red   (adverse: late, burned more than planned)
+             *   negative → green (beneficial: early, saved fuel)
+             *   zero     → blue  (exactly on plan)
+             *
+             * For fuel REMAINING the sign semantics are reversed (more remaining is good),
+             * so callers must negate: getDifferenceColor(-fuelRemainingDifference).
+             */
             const getDifferenceColor = (difference) => {
                 if (difference === 0) return "text-blue-500";
                 return difference > 0 ? "text-red-500" : "text-emerald-500";
             };
 
+            /**
+             * Renders a planned value with an inline colour-coded diff annotation,
+             * e.g. "44212 KG (+100 KG)" in red, or "10:40Z (-2 min)" in green.
+             * Used on the OFP card so pilots can see deviations at a glance without
+             * opening the detail modal.
+             *
+             * @param {string} plannedValue - Formatted planned value to display
+             * @param {number|null} difference - Actual − Planned; null hides the annotation
+             * @param {string} unit - Optional unit suffix for the diff label
+             * @param {boolean} invertDiffColor - Pass true for fuel remaining, where a
+             *   positive diff is beneficial (more fuel on board than planned)
+             */
             const renderPlannedWithDiff = (plannedValue, difference, unit = "", invertDiffColor = false) => {
                 if (difference === null || difference === undefined || isNaN(difference)) {
                     return plannedValue;

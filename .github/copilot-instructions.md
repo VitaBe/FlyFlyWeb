@@ -126,6 +126,33 @@ Wrap new row grids in: `h('div', { className: "contents" }, ...)` inside a CSS g
 - `actualData` state is owned by `WaypointCard` and passed into `WaypointDetailModal`, so edits are synchronized in both views.
 - Popup close actions: backdrop click, close button, or Escape key.
 
+### Fuel check logic (EFB workflow)
+
+The entire `actualData` / diff / stepper system exists to support the **EFB fuel check**: at each waypoint the pilot enters the actual fuel and time values observed in the cockpit and compares them against the planned OFP values.
+
+**Data flow:**
+1. `WaypointCard` owns `actualData` state (`{ time, used, remaining }` — all empty strings until entered).
+2. The pilot opens `WaypointDetailModal` by tapping the waypoint title.
+3. The modal exposes editable inputs + ▲/▼ steppers; changes flow back via `setActualData`.
+4. `WaypointCard` recomputes diffs and shows inline annotations immediately.
+
+**Diff formula** — always `Actual − Planned`:
+- `timeDifference`: positive = late (red), negative = early (green)
+- `fuelUsedDifference`: positive = more burned = adverse (red)
+- `fuelRemainingDifference`: positive = more fuel on board = beneficial (green) — **colour inverted**
+
+**Rendering diffs:**
+- `getDifferenceColor(diff)` → `text-red-500` / `text-emerald-500` / `text-blue-500`
+- For fuel remaining, always negate: `getDifferenceColor(-fuelRemainingDifference)`
+- `renderPlannedWithDiff(planned, diff, unit, invertDiffColor)` renders the card annotation, e.g. `44212 KG (+100 KG)` in green
+- A `null` diff (no actual entered) suppresses the annotation entirely
+
+**Stepper smart-init:**
+- First ▲ tap: initialises field to `Math.ceil(planned / FUEL_STEP) * FUEL_STEP`
+- First ▼ tap: initialises field to `Math.floor(planned / FUEL_STEP) * FUEL_STEP`
+- Subsequent taps: add/subtract `FUEL_STEP` (100 KG/LBS)
+- Direct text input pre-fills field with the planned value on the first keystroke
+
 ---
 
 ## Domain Notes (Aviation)

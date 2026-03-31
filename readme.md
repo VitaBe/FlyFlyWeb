@@ -112,6 +112,43 @@ The app expects a JSON array or object containing:
 * **Export Functionality:** Generate PDF or CSV reports with selected columns for archival or sharing.  
 * **Advanced Analysis:** Flight profile comparisons, performance metrics, and anomaly detection.
 
+## **Fuel Check — EFB Workflow**
+
+A core EFB (Electronic Flight Bag) function is the **fuel check**: at each waypoint the pilot compares the planned fuel values from the OFP against what is actually observed on the aircraft fuel gauges. FlightLog Pro implements this workflow end-to-end.
+
+### How It Works
+
+1. **Planned values** are parsed from `routes.backup` (`fuel.cumulated` and `fuel.remaining` for each waypoint) and displayed on every `WaypointCard` in the OFP tab.
+
+2. **Actual entry** — The pilot taps a waypoint title to open the `WaypointDetailModal`, which exposes three editable fields:
+   - **Time** — actual UTC passing time (HH:MM)
+   - **Used** — cumulative fuel burned to this waypoint (KG or LBS)
+   - **Remaining** — fuel on board at this waypoint (KG or LBS)
+
+3. **Stepper buttons (▲/▼)** allow quick adjustment in **100-unit** increments (`FUEL_STEP = 100`). On the first tap, the field initialises to the nearest 100-unit boundary around the planned value so the pilot can make a small adjustment rather than typing from scratch.
+
+4. **Diff calculation** — All diffs follow `Actual − Planned`:
+   - *Time diff*: positive = late, negative = early
+   - *Fuel Used diff*: positive = more burned than planned (adverse)
+   - *Fuel Remaining diff*: positive = more fuel on board than planned (beneficial)
+
+5. **Colour coding** makes deviations immediately scannable:
+   | Colour | Meaning |
+   |--------|---------|
+   | 🔴 Red | Adverse deviation (late, burned more) |
+   | 🟢 Green | Beneficial deviation (early, saved fuel) |
+   | 🔵 Blue | Exactly on plan (zero diff) |
+   > Exception: for *Fuel Remaining* the sign is inverted before colouring — more fuel remaining is good, so a positive diff is shown in green.
+
+6. **Card annotations** — After entering actuals, the `WaypointCard` shows the planned value with the diff inline, e.g.:
+   - `10:40Z (+3 min)` in red — 3 minutes late
+   - `2930 KG (-100 KG)` in green — 100 KG less burned than planned
+   - `44212 KG (+100 KG)` in green — 100 KG more remaining than planned
+
+7. **State sync** — `actualData` is owned by `WaypointCard` and passed into `WaypointDetailModal`, so values edited in the modal are immediately reflected on the card without any extra save step.
+
+---
+
 ## **How to Use**
 
 1. **Upload Flight Data:** Click "Choose File" on the welcome screen and select a `.zip`/`.effarchive` export containing `routes.backup` and `flight.backup`.
