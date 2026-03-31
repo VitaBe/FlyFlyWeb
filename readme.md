@@ -13,6 +13,7 @@ The application is built as a **Single File Application (SFA)**, meaning all log
 * **Route Selection:** Automatically identifies the primary flight route (searching for id: 0\) while providing fallbacks for other data formats.  
 * **Data Chronology:** Implements a sorting algorithm that organizes waypoints by their sequenceId to ensure the flight path is displayed in the correct order, regardless of the JSON's internal sorting.  
 * **Aviation Metrics Visualization:** Extracts and formats specific aviation data displayed in WaypointCard rows:  
+  * **OFF BLOCK Start Card:** The OFP tab begins with a visually highlighted OFF BLOCK card before the waypoint list. It uses `flight.backup` data to show the origin airport ICAO as the title, the scheduled off-block time from `scheduledTimes.offBlock`, and the block fuel from `plannedFuels` where `uid = "blockFuel"`.
   * **Base Columns (Always Display):** Waypoint title, planned time (HH:MM), fuel used, and fuel remaining.  
   * **Waypoint Detail Popup:** Clicking a waypoint title opens a modal with full waypoint details and all non-empty STATIC_COLUMNS values.
   * **Shared Actual Inputs:** The modal contains the ACTUAL controls (time, fuel used, fuel remaining with ▲/▼ steppers). Values are synchronized with the waypoint card in real time.
@@ -38,7 +39,7 @@ The code is divided into four distinct logical layers:
 
 * **Utility Functions:** Small, pure functions for string and number formatting (formatTime, formatFuel, formatNumber, formatUnit), value extraction (getNestedValue, extractTrackValue), and deep object navigation.  
 * **Data Processing:** A robust parser (processFlightData) that handles error boundaries, JSON parsing, route extraction, and waypoint sorting.  
-* **UI Components:** Modular React components (WelcomeScreen, RouteHeader, WaypointCard, WaypointDetailModal) that ensure the interface is maintainable and extensible.  
+* **UI Components:** Modular React components (WelcomeScreen, RouteHeader, OffBlockSection, WaypointCard, WaypointDetailModal) that ensure the interface is maintainable and extensible.  
 * **Static Column System:** A hardcoded array (STATIC_COLUMNS) defining 19 available aviation metrics fields with human-readable labels. Users toggle column visibility through the Settings panel, which updates the component grid dynamically.  
 * **App Controller:** The main App component managing the lifecycle (Upload → Process → Display → Reset) with state for route data, selected columns, and UI visibility.
 
@@ -152,17 +153,18 @@ A core EFB (Electronic Flight Bag) function is the **fuel check**: at each waypo
 ## **How to Use**
 
 1. **Upload Flight Data:** Click "Choose File" on the welcome screen and select a `.zip`/`.effarchive` export containing `routes.backup` and `flight.backup`.
-2. **View Flight Plan:** The application displays waypoints in chronological order with base columns (Time, Used Fuel, Remaining Fuel).
-3. **Configure Columns:** Click the **Settings (gear) icon** in the top-right to open the Column Settings panel.
-4. **Toggle Fields:** Check/uncheck any of the 19 available fields to add or remove columns from the waypoint grid (all default to hidden).
-5. **Open Waypoint Popup:** Click a waypoint title to open the detail popup.
-6. **Enter Actual Data:** In the popup, edit actual flight times and fuel values with the blue inputs and steppers.
-7. **Review Compact Diff in OFP Card:** The card shows planned values with inline diff in parentheses:
+2. **View Flight Plan:** The application displays a highlighted OFF BLOCK start card first, followed by waypoints in chronological order with base columns (Time, Used Fuel, Remaining Fuel).
+3. **Review OFF BLOCK Snapshot:** The special OFP start card shows the departure airport ICAO, scheduled off-block time, and planned block fuel from `flight.backup`.
+4. **Configure Columns:** Click the **Settings (gear) icon** in the top-right to open the Column Settings panel.
+5. **Toggle Fields:** Check/uncheck any of the 19 available fields to add or remove columns from the waypoint grid (all default to hidden).
+6. **Open Waypoint Popup:** Click a waypoint title to open the detail popup.
+7. **Enter Actual Data:** In the popup, edit actual flight times and fuel values with the blue inputs and steppers.
+8. **Review Compact Diff in OFP Card:** The card shows planned values with inline diff in parentheses:
   - **Green** = Beneficial deviation
   - **Red** = Adverse deviation
   - **Blue** = No deviation (zero diff)
-8. **Close Popup / Continue:** Close the popup to keep reviewing the OFP cards with synchronized values.
-9. **Close Flight:** Click the "Close" button to reset and upload a new file.
+9. **Close Popup / Continue:** Close the popup to keep reviewing the OFP cards with synchronized values.
+10. **Close Flight:** Click the "Close" button to reset and upload a new file.
 
 ## **How to Run**
 
