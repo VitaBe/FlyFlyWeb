@@ -44,6 +44,7 @@
         }
 
         input[type="number"] {
+            appearance: textfield;
             -moz-appearance: textfield;
         }
 
@@ -335,7 +336,7 @@
         /**
          * Extracts routes.backup and flight.backup JSON payloads from a ZIP-compatible archive.
          * @param {File} uploadedFile - User-selected archive file.
-         * @returns {Promise<{routesBackupText: string, flightBackupText: string|null, pdfFiles: Array<{name: string, blob: Blob}>}>}
+         * @returns {Promise<{routesBackupText: string, flightBackupText: string|null, crewMembersBackupText: string|null, documentsBackupText: string|null, pdfFiles: Array<{name: string, blob: Blob}>}>}
          * @throws {Error} If archive cannot be read or routes.backup is missing.
          */
         const readBackupFilesFromArchive = async (uploadedFile) => {
@@ -358,15 +359,19 @@
 
             const flightEntry = zipArchive.file('flight.backup');
             const crewMembersEntry = zipArchive.file('crewMembers.backup');
+            const documentsEntry = zipArchive.file('documents.backup');
             const pdfEntries = Object.values(zipArchive.files)
                 .filter((archiveEntry) => !archiveEntry.dir && /\.pdf$/i.test(archiveEntry.name));
 
-            const [routesBackupText, flightBackupText, crewMembersBackupText, pdfBlobs] = await Promise.all([
+            const [routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, pdfBlobs] = await Promise.all([
                 routesEntry.async('string'),
                 flightEntry ? flightEntry.async('string') : Promise.resolve(null),
                 crewMembersEntry ? crewMembersEntry.async('string') : Promise.resolve(null),
+                documentsEntry ? documentsEntry.async('string') : Promise.resolve(null),
                 Promise.all(pdfEntries.map((pdfEntry) => pdfEntry.async('blob')))
             ]);
+
+            const getArchiveBaseName = (archivePath) => archivePath.split('/').pop() || archivePath;
 
             const pdfFiles = pdfEntries.map((pdfEntry, index) => {
                 const originalBlob = pdfBlobs[index];
@@ -375,12 +380,12 @@
                     : new Blob([originalBlob], { type: 'application/pdf' });
 
                 return {
-                    name: pdfEntry.name,
+                    name: getArchiveBaseName(pdfEntry.name),
                     blob: pdfBlob
                 };
             });
 
-            return { routesBackupText, flightBackupText, crewMembersBackupText, pdfFiles };
+            return { routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, pdfFiles };
         };
 
         /**
@@ -392,6 +397,32 @@
             if (!jsonText) return null;
             const parsedData = JSON.parse(jsonText);
             return parsedData && typeof parsedData === 'object' ? parsedData : null;
+        };
+
+        /**
+         * Parses documents.backup and returns PDF document entries in metadata order.
+         * @param {string|null} jsonText - Raw JSON string from documents.backup.
+         * @returns {Array<{filename: string}>} PDF document metadata entries.
+         */
+        const processDocumentMetadata = (jsonText) => {
+            if (!jsonText) return [];
+
+            const parsedData = JSON.parse(jsonText);
+            if (!Array.isArray(parsedData)) return [];
+
+            return parsedData.filter((documentItem) => {
+                if (!documentItem || typeof documentItem !== 'object') return false;
+
+                const filename = typeof documentItem.filename === 'string'
+                    ? documentItem.filename.trim()
+                    : '';
+                const extension = typeof documentItem.extension === 'string'
+                    ? documentItem.extension.trim().toLowerCase()
+                    : '';
+
+                if (!filename) return false;
+                return extension === 'pdf' || /\.pdf$/i.test(filename);
+            });
         };
 
         /**
@@ -1309,6 +1340,7 @@
                     )
                 ),
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('h3', { className: "text-sm sm:text-base font-bold text-gray-800 mb-4 break-words" }, activeDocument.name),
                     h(PdfViewer, { url: activeDocument.url })
                 )
             );
@@ -1394,14 +1426,31 @@
                 if (!selectedFile) return;
 
                 try {
-                    const { routesBackupText, flightBackupText, crewMembersBackupText, pdfFiles } = await readBackupFilesFromArchive(selectedFile);
+                    const { routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, pdfFiles } = await readBackupFilesFromArchive(selectedFile);
                     const processedRoute = processFlightData(routesBackupText);
                     const processedSummary = processFlightSummaryData(flightBackupText);
                     const processedCrew = crewMembersBackupText ? JSON.parse(crewMembersBackupText) : null;
-                    const mappedPdfDocuments = pdfFiles.map((pdfFile) => ({
-                        name: pdfFile.name,
-                        url: URL.createObjectURL(pdfFile.blob)
-                    }));
+                    const documentMetadata = processDocumentMetadata(documentsBackupText);
+                    const pdfFileMap = new Map(
+                        pdfFiles.map((pdfFile) => [pdfFile.name.toLowerCase(), pdfFile])
+                    );
+                    const metadataDrivenPdfDocuments = documentMetadata
+                        .map((documentItem) => {
+                            const matchingPdf = pdfFileMap.get(documentItem.filename.toLowerCase());
+                            if (!matchingPdf) return null;
+
+                            return {
+                                name: documentItem.filename,
+                                url: URL.createObjectURL(matchingPdf.blob)
+                            };
+                        })
+                        .filter(Boolean);
+                    const mappedPdfDocuments = metadataDrivenPdfDocuments.length > 0
+                        ? metadataDrivenPdfDocuments
+                        : pdfFiles.map((pdfFile) => ({
+                            name: pdfFile.name,
+                            url: URL.createObjectURL(pdfFile.blob)
+                        }));
 
                     setRouteData(processedRoute);
                     setFlightSummaryData(processedSummary);
