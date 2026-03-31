@@ -418,7 +418,7 @@
         };
 
         /**
-         * Parses flight.backup JSON payload used for the Flight Summary tab.
+         * Parses flight.backup JSON payload used for the Overview tab.
          * @param {string|null} jsonText - Raw JSON string from flight.backup.
          * @returns {Object|null} Parsed summary object or null when unavailable.
          */
@@ -1258,7 +1258,7 @@
         const FlightSummaryPage = ({ summary, crewMembers }) => {
             if (!summary) {
                 return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
-                    h('h3', { className: "text-lg font-bold mb-2" }, "Flight Summary"),
+                    h('h3', { className: "text-lg font-bold mb-2" }, "Overview"),
                     h('p', null, "No flight.backup data found in this archive.")
                 );
             }
@@ -1824,7 +1824,7 @@
             // Main application interface
             return h('div', { className: "max-w-6xl mx-auto p-3 sm:p-6 animate-in" },
 
-                // Subpage menu (Flight Summary / OFP) + Settings button
+                // Subpage menu (Overview / OFP) + Settings button
                 h('div', { className: "flex items-center gap-3 mb-4 sm:mb-6" },
                     h('button', {
                         className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'summary' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
@@ -1832,7 +1832,7 @@
                             setSelectedPage('summary');
                             setShowSettings(false);
                         }
-                    }, 'Flight Summary'),
+                    }, 'Overview'),
                     h('button', {
                         className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'OFP' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
                         onClick: () => setSelectedPage('OFP')
@@ -1854,8 +1854,8 @@
                         showSettings && h('div', {
                             className: "absolute top-11 right-0 z-20 bg-white border border-gray-200 rounded-2xl shadow-xl p-4 w-[min(92vw,440px)] animate-in"
                         },
-                            // Flight Summary section
-                            h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Flight Summary"),
+                            // Overview section
+                            h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Overview"),
                             h('p', { className: "text-xs text-gray-400 mb-3" }, "No settings"),
 
                             h('div', { className: "border-t border-gray-100 my-3" }),
@@ -1887,6 +1887,12 @@
 
                             h('div', { className: "border-t border-gray-100 mt-1 mb-3" }),
 
+                            // Close settings action
+                            h('button', {
+                                onClick: () => setShowSettings(false),
+                                className: "w-full text-left text-sm font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2 rounded-lg transition-colors mb-1"
+                            }, "Close Settings"),
+
                             // Close flight action
                             h('button', {
                                 onClick: () => {
@@ -1903,7 +1909,7 @@
                     )
                 ),
 
-                // Route header is shown only on Flight Summary page
+                // Route header is shown only on Overview page
                 selectedPage === 'summary' && h(RouteHeader, {
                     route: routeData,
                     atcCallsign: flightSummaryData?.atcCallsign || null,

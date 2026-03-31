@@ -52,7 +52,7 @@ h('div', { className: "..." }, h(MyComponent, { prop: value }))
 
 | Value | Label | Content |
 |-------|-------|---------|
-| `'summary'` | Flight Summary | `FlightSummaryPage` (flight.backup data) |
+| `'summary'` | Overview | `FlightSummaryPage` (flight.backup data) |
 | `'OFP'` | OFP | `WaypointCard` list; fuel check already implemented |
 | `'documents'` | Documents | `DocumentsPage` |
 
@@ -174,7 +174,7 @@ The entire `actualData` / diff / stepper system exists to support the **EFB fuel
 | Archive import (effarchive/ZIP) | ✅ Done |
 | Waypoint OFP with fuel check | ✅ Done |
 | 19 configurable extra columns | ✅ Done |
-| Flight Summary (flight.backup) | ✅ Done |
+| Overview (flight.backup) | ✅ Done |
 | Documents tab (PDF, images, text) | ✅ Done |
 | Crew roster display | ✅ Done |
 | OptiClimb / ATC text | ✅ Done |
