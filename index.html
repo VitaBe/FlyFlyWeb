@@ -1714,8 +1714,8 @@
                     )
                 ),
 
-                // Route header with destination info and controls
-                h(RouteHeader, {
+                // Route header is shown only on Flight Summary page
+                selectedPage === 'summary' && h(RouteHeader, {
                     route: routeData,
                     atcCallsign: flightSummaryData?.atcCallsign || null,
                     flightNumber: flightSummaryData?.flightNumber || null,
