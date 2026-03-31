@@ -2528,10 +2528,38 @@
             }
 
             const stationMap = new Map();
+            const stationRolesMap = new Map();
+
+            const normalizeStationRole = (notamEntry) => {
+                const rawRole = String(notamEntry?.function?.value || notamEntry?.initialFunction || 'other').trim().toLowerCase();
+
+                const roleBySource = {
+                    departure: 'departure',
+                    destination: 'destination',
+                    destinationalternate: 'alternate',
+                    etops: 'etops',
+                    enroute: 'enroute',
+                    fir: 'fir',
+                    other: 'other'
+                };
+
+                return roleBySource[rawRole] || 'other';
+            };
+
+            const stationRoleLabels = {
+                departure: 'Departure',
+                destination: 'Destination',
+                alternate: 'Alternate',
+                etops: 'ETOPS',
+                enroute: 'Enroute',
+                fir: 'FIR/UIR',
+                other: 'Other'
+            };
 
             notams.forEach((notamEntry, index) => {
                 const stationCode = String(notamEntry?.icaoCode || notamEntry?.issuer || 'OTHER').trim().toUpperCase() || 'OTHER';
                 const stationName = String(notamEntry?.name || '').trim();
+                const stationRole = normalizeStationRole(notamEntry);
 
                 if (!stationMap.has(stationCode)) {
                     stationMap.set(stationCode, {
@@ -2546,6 +2574,11 @@
                     stationEntry.name = stationName;
                 }
 
+                if (!stationRolesMap.has(stationCode)) {
+                    stationRolesMap.set(stationCode, new Set());
+                }
+                stationRolesMap.get(stationCode).add(stationRole);
+
                 stationEntry.items.push({
                     ...notamEntry,
                     _index: index
@@ -2554,6 +2587,24 @@
 
             const stationGroups = Array.from(stationMap.values())
                 .sort((stationA, stationB) => stationA.code.localeCompare(stationB.code));
+
+            const stationIndexByCode = new Map(
+                stationGroups.map((stationEntry, stationIndex) => [stationEntry.code, stationIndex])
+            );
+
+            const roleOrder = ['departure', 'destination', 'alternate', 'etops', 'enroute', 'fir', 'other'];
+            const stationsByRole = roleOrder
+                .map((roleKey) => {
+                    const stationsForRole = stationGroups
+                        .filter((stationEntry) => stationRolesMap.get(stationEntry.code)?.has(roleKey));
+
+                    return {
+                        roleKey,
+                        roleLabel: stationRoleLabels[roleKey],
+                        stations: stationsForRole
+                    };
+                })
+                .filter((roleEntry) => roleEntry.stations.length > 0);
 
             useEffect(() => {
                 setSelectedStationIndex((previousIndex) => {
@@ -2564,6 +2615,9 @@
 
             const safeStationIndex = Math.min(Math.max(selectedStationIndex, 0), stationGroups.length - 1);
             const activeStation = stationGroups[safeStationIndex];
+            const activeStationRoles = roleOrder
+                .filter((roleKey) => stationRolesMap.get(activeStation.code)?.has(roleKey))
+                .map((roleKey) => stationRoleLabels[roleKey]);
 
             const sortedStationNotams = activeStation.items.slice().sort((notamA, notamB) => {
                 const timeA = Date.parse(notamA.startDate || '') || 0;
@@ -2609,17 +2663,25 @@
 
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                     h('div', { className: "flex items-center justify-between gap-3 mb-3" },
-                        h('h4', { className: "text-sm font-black text-gray-700 uppercase tracking-wide" }, "Select Station"),
+                        h('h4', { className: "text-sm font-black text-gray-700 uppercase tracking-wide" }, "Select Station Grouped By Function"),
                         h('span', { className: "text-xs font-bold text-gray-500" }, `${safeStationIndex + 1}/${stationGroups.length}`)
                     ),
-                    h('div', { className: "flex gap-2 overflow-x-auto pb-1" },
-                        stationGroups.map((stationGroup, stationIndex) =>
-                            h('button', {
-                                key: stationGroup.code,
-                                type: 'button',
-                                onClick: () => setSelectedStationIndex(stationIndex),
-                                className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${stationIndex === safeStationIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
-                            }, stationGroup.code)
+                    h('div', { className: "space-y-3" },
+                        stationsByRole.map((roleEntry) =>
+                            h('div', { key: roleEntry.roleKey },
+                                h('p', { className: "text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-1.5" }, roleEntry.roleLabel),
+                                h('div', { className: "flex gap-2 overflow-x-auto pb-1" },
+                                    roleEntry.stations.map((stationGroup) => {
+                                        const stationIndex = stationIndexByCode.get(stationGroup.code);
+                                        return h('button', {
+                                            key: `${roleEntry.roleKey}-${stationGroup.code}`,
+                                            type: 'button',
+                                            onClick: () => setSelectedStationIndex(stationIndex),
+                                            className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${stationIndex === safeStationIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                                        }, stationGroup.code);
+                                    })
+                                )
+                            )
                         )
                     )
                 ),
@@ -2647,7 +2709,8 @@
                         h('div', { className: "text-right" },
                             h('p', { className: "text-[10px] uppercase font-bold tracking-wider text-gray-400" }, "Station"),
                             h('h4', { className: "text-lg sm:text-2xl font-black text-gray-800" }, activeStation.code),
-                            activeStation.name && h('p', { className: "text-sm sm:text-base text-gray-500 font-medium" }, activeStation.name)
+                            activeStation.name && h('p', { className: "text-sm sm:text-base text-gray-500 font-medium" }, activeStation.name),
+                            activeStationRoles.length > 0 && h('p', { className: "text-[11px] text-gray-400 font-bold uppercase tracking-wide mt-1" }, activeStationRoles.join(' / '))
                         )
                     ),
 
