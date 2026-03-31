@@ -1492,7 +1492,8 @@
                 h('div', { className: "px-1 flex items-center justify-between gap-3" },
                     h('div', null,
                         h('p', { className: "text-[10px] uppercase font-bold tracking-[0.22em] text-sky-600 mb-1" }, 'OFF BLOCK')
-                    )
+                    ),
+                    h('div', { className: "text-[10px] uppercase font-bold tracking-widest text-sky-500 whitespace-nowrap" }, 'Tap on waypoint cards')
                 ),
                 h('div', {
                     className: "bg-white/90 ring-1 ring-sky-200 p-3 sm:p-6 rounded-3xl shadow-[0_10px_30px_rgba(14,116,144,0.10)] flex items-start gap-3 sm:gap-6 cursor-pointer",
@@ -1500,8 +1501,7 @@
                 },
                     h('div', { className: "flex-1 overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0" },
                         h('div', { className: "flex items-center justify-between gap-3 mb-3" },
-                            h('div', { className: "font-black text-base sm:text-xl text-gray-800 truncate" }, originTitle),
-                            h('div', { className: "text-[10px] uppercase font-bold tracking-widest text-sky-500 whitespace-nowrap" }, 'Tap to edit')
+                            h('div', { className: "font-black text-base sm:text-xl text-gray-800 truncate" }, originTitle)
                         ),
                         h('div', { className: "grid grid-cols-[130px_160px] gap-x-6 gap-y-0 min-w-max" },
                             h('div', { className: "contents" },
@@ -2216,13 +2216,20 @@
                         h(OffBlockSection, {
                             summary: flightSummaryData
                         }),
-                        (routeData.waypoints || []).map((waypoint, index) =>
-                            h(WaypointCard, {
-                                key: waypoint.UUID || index,
-                                waypoint: waypoint,
-                                index: index,
-                                selectedColumns: selectedColumns
-                            })
+                        h('div', { className: "rounded-[2rem] border border-sky-100 bg-gradient-to-br from-sky-50 via-cyan-50 to-white p-3 sm:p-5 shadow-sm space-y-3" },
+                            h('div', { className: "px-1" },
+                                h('p', { className: "text-[10px] uppercase font-bold tracking-[0.22em] text-sky-600 mb-1" }, 'DEPARTURE')
+                            ),
+                            h('div', { className: "space-y-4" },
+                                (routeData.waypoints || []).map((waypoint, index) =>
+                                    h(WaypointCard, {
+                                        key: waypoint.UUID || index,
+                                        waypoint: waypoint,
+                                        index: index,
+                                        selectedColumns: selectedColumns
+                                    })
+                                )
+                            )
                         )
                     )
                     : selectedPage === 'documents'
