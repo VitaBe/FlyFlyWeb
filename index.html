@@ -2218,7 +2218,7 @@
                         }),
                         h('div', { className: "rounded-[2rem] border border-sky-100 bg-gradient-to-br from-sky-50 via-cyan-50 to-white p-3 sm:p-5 shadow-sm space-y-3" },
                             h('div', { className: "px-1" },
-                                h('p', { className: "text-[10px] uppercase font-bold tracking-[0.22em] text-sky-600 mb-1" }, 'DEPARTURE')
+                                h('p', { className: "text-[10px] uppercase font-bold tracking-[0.22em] text-sky-500 mb-1" }, 'DEPARTURE')
                             ),
                             h('div', { className: "space-y-4" },
                                 (routeData.waypoints || []).map((waypoint, index) =>
@@ -2229,6 +2229,9 @@
                                         selectedColumns: selectedColumns
                                     })
                                 )
+                            ),
+                            h('div', { className: "px-1 pt-1" },
+                                h('p', { className: "text-[10px] uppercase font-bold tracking-[0.22em] text-sky-500 mb-1" }, 'LANDING')
                             )
                         )
                     )
