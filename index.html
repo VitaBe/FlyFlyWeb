@@ -43,6 +43,16 @@
         input[type="number"] {
             -moz-appearance: textfield;
         }
+
+        /* Prevent 300ms tap delay on mobile */
+        button, input, label {
+            touch-action: manipulation;
+        }
+
+        /* Ensure minimum touch target size */
+        button {
+            min-height: 28px;
+        }
     </style>
 </head>
 
@@ -63,8 +73,8 @@
             label: "text-[10px] uppercase font-bold text-gray-400 tracking-wider",
             value: "text-[10px] font-bold text-gray-700",
             rowHeight: "h-7 flex items-center",
-            input: "w-full bg-gray-50 border-none rounded px-2 py-0.5 font-bold text-[9px] text-blue-600 placeholder:text-gray-300 focus:ring-1 focus:ring-blue-100 outline-none h-6",
-            button: "px-1 py-0 bg-gray-50 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 text-[8px] font-bold leading-none transition-colors"
+            input: "w-full bg-gray-50 border-none rounded px-2 py-0.5 font-bold text-[9px] text-blue-600 placeholder:text-gray-300 focus:ring-1 focus:ring-blue-100 outline-none h-7",
+            button: "px-1.5 py-0.5 bg-gray-50 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 text-[8px] font-bold leading-none transition-colors"
         };
 
         // Fuel increment/decrement step size
@@ -364,14 +374,14 @@
          */
         const WelcomeScreen = ({ onFileSelected, error }) => {
             return h('div', {
-                className: "min-h-screen flex flex-col items-center justify-center p-6 text-center"
+                className: "min-h-screen flex flex-col items-center justify-center p-4 text-center"
             },
-                h('div', { className: "bg-white p-12 rounded-[3rem] shadow-xl animate-in" },
-                    h(Icon, { name: "upload", className: "w-16 h-16 text-blue-600 mx-auto mb-6" }),
-                    h('h1', { className: "text-3xl font-black mb-4" }, "FlightLog Pro"),
-                    h('p', { className: "text-gray-500 mb-8" }, "Upload your .backup route file"),
+                h('div', { className: "bg-white p-6 sm:p-12 rounded-3xl sm:rounded-[3rem] shadow-xl animate-in w-full max-w-sm sm:max-w-md" },
+                    h(Icon, { name: "upload", className: "w-12 h-12 sm:w-16 sm:h-16 text-blue-600 mx-auto mb-4 sm:mb-6" }),
+                    h('h1', { className: "text-2xl sm:text-3xl font-black mb-3 sm:mb-4" }, "FlightLog Pro"),
+                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload your .backup route file"),
                     h('label', {
-                        className: "bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold cursor-pointer hover:bg-blue-700 transition-all block"
+                        className: "bg-blue-600 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-bold cursor-pointer hover:bg-blue-700 transition-all block"
                     },
                         "Choose File",
                         h('input', {
@@ -402,21 +412,21 @@
             const icaoCode = route.airport?.icaoCode || "N/A";
 
             return h('div', {
-                className: "bg-white p-8 rounded-[2rem] shadow-sm mb-8 flex justify-between items-center"
+                className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm mb-4 sm:mb-8 flex flex-wrap justify-between items-center gap-4"
             },
-                h('div', null,
+                h('div', { className: "min-w-0" },
                     h('p', { className: "text-blue-600 text-[10px] font-bold uppercase tracking-widest" }, "Destination"),
-                    h('h2', { className: "text-3xl font-black" }, airportName),
+                    h('h2', { className: "text-xl sm:text-3xl font-black truncate" }, airportName),
                     h('span', { className: "text-gray-400 font-bold" }, icaoCode)
                 ),
-                h('div', { className: "flex gap-4" },
+                h('div', { className: "flex gap-2 sm:gap-4 shrink-0" },
                     h('button', {
                         onClick: onSettingsToggle,
                         className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-50 p-3 rounded-xl transition-colors flex items-center"
                     }, h(Icon, { name: "settings", className: "w-5 h-5" })),
                     h('button', {
                         onClick: onClose,
-                        className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-50 px-6 py-2 rounded-xl transition-colors"
+                        className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-50 px-4 sm:px-6 py-2 rounded-xl transition-colors"
                     }, "Close")
                 )
             );
@@ -670,20 +680,20 @@
             // Calculate grid layout based on selected columns
             const baseColumnCount = 4; // Label + Time + Used + Remaining
             const extraColumnCount = selectedColumns?.length || 0;
-            const gridColumnTemplate = `grid-cols-[56px_72px_72px_72px${'_72px'.repeat(extraColumnCount)}]`;
+            const gridColumnTemplate = `grid-cols-[56px_100px_100px_100px${'_100px'.repeat(extraColumnCount)}]`;
 
             // ==========================================
             // RENDER COMPONENT
             // ==========================================
 
-            return h('div', { className: "bg-white p-6 rounded-3xl shadow-sm flex items-start gap-6" },
+            return h('div', { className: "bg-white p-3 sm:p-6 rounded-3xl shadow-sm flex items-start gap-3 sm:gap-6" },
                 // Waypoint index (hidden for now)
                 h('div', { className: "hidden w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center font-black text-gray-300 mt-1" }, index + 1),
 
                 // Main content area
-                h('div', { className: "flex-1 overflow-x-auto" },
+                h('div', { className: "flex-1 overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0" },
                     // Waypoint title
-                    h('div', { className: "font-black text-xl text-gray-800 mb-2 truncate" }, waypoint.title || "Unnamed Fix"),
+                    h('div', { className: "font-black text-base sm:text-xl text-gray-800 mb-2 truncate" }, waypoint.title || "Unnamed Fix"),
 
                     // Data grid
                     h('div', { className: `grid ${gridColumnTemplate} gap-x-6 gap-y-0 min-w-max` },
@@ -734,15 +744,15 @@
                                         }
                                     }
                                 }),
-                                h('div', { className: "flex flex-col gap-0.5" },
-                                    h('button', {
-                                        onClick: incrementTime,
-                                        className: UI_STYLES.button
-                                    }, "▲"),
+                                h('div', { className: "flex flex-row gap-0.5" },
                                     h('button', {
                                         onClick: decrementTime,
                                         className: UI_STYLES.button
-                                    }, "▼")
+                                    }, "▼"),
+                                    h('button', {
+                                        onClick: incrementTime,
+                                        className: UI_STYLES.button
+                                    }, "▲")
                                 )
                             ),
 
@@ -755,15 +765,15 @@
                                     value: actualData.used,
                                     onChange: handleFuelUsedChange
                                 }),
-                                h('div', { className: "flex flex-col gap-0.5" },
-                                    h('button', {
-                                        onClick: incrementFuelUsed,
-                                        className: UI_STYLES.button
-                                    }, "▲"),
+                                h('div', { className: "flex flex-row gap-0.5" },
                                     h('button', {
                                         onClick: decrementFuelUsed,
                                         className: UI_STYLES.button
-                                    }, "▼")
+                                    }, "▼"),
+                                    h('button', {
+                                        onClick: incrementFuelUsed,
+                                        className: UI_STYLES.button
+                                    }, "▲")
                                 )
                             ),
 
@@ -776,15 +786,15 @@
                                     value: actualData.remaining,
                                     onChange: handleFuelRemainingChange
                                 }),
-                                h('div', { className: "flex flex-col gap-0.5" },
-                                    h('button', {
-                                        onClick: incrementFuelRemaining,
-                                        className: UI_STYLES.button
-                                    }, "▲"),
+                                h('div', { className: "flex flex-row gap-0.5" },
                                     h('button', {
                                         onClick: decrementFuelRemaining,
                                         className: UI_STYLES.button
-                                    }, "▼")
+                                    }, "▼"),
+                                    h('button', {
+                                        onClick: incrementFuelRemaining,
+                                        className: UI_STYLES.button
+                                    }, "▲")
                                 )
                             ),
 
@@ -906,10 +916,10 @@
             }
 
             // Main application interface
-            return h('div', { className: "max-w-6xl mx-auto p-6 animate-in" },
+            return h('div', { className: "max-w-6xl mx-auto p-3 sm:p-6 animate-in" },
 
                 // Subpage menu (OFP / Flight Summary)
-                h('div', { className: "flex items-center gap-3 mb-6" },
+                h('div', { className: "flex items-center gap-3 mb-4 sm:mb-6" },
                     h('button', {
                         className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'OFP' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
                         onClick: () => setSelectedPage('OFP')
@@ -928,9 +938,9 @@
                 }),
 
                 // Settings panel for column visibility (conditionally rendered)
-                showSettings && h('div', { className: "bg-white p-8 rounded-[2rem] shadow-sm mb-8 animate-in" },
+                showSettings && h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm mb-4 sm:mb-8 animate-in" },
                     h('h3', { className: "font-black text-lg mb-4" }, "Column Settings"),
-                    h('div', { className: "grid grid-cols-2 md:grid-cols-4 gap-4" },
+                    h('div', { className: "grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4" },
                         STATIC_COLUMNS
                             .slice()
                             .sort((a, b) => a.label.localeCompare(b.label))
@@ -961,7 +971,7 @@
                             })
                         )
                     )
-                    : h('div', { className: "bg-white p-8 rounded-[2rem] shadow-sm text-center text-gray-500" },
+                    : h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
                         h('h3', { className: "text-lg font-bold mb-2" }, "Summary"),
                         h('p', null, "Summary content will be available here soon.")
                     )
