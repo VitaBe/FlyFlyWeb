@@ -121,6 +121,34 @@
         };
 
         /**
+         * Formats an ISO date string into UTC date-time (YYYY-MM-DD HH:MMZ).
+         * @param {string} isoString - The ISO date string to format.
+         * @returns {string} Formatted UTC date-time or "-" if invalid.
+         */
+        const formatUtcDateTime = (isoString) => {
+            if (!isoString) return '-';
+            const date = new Date(isoString);
+            if (isNaN(date)) return '-';
+
+            const year = date.getUTCFullYear();
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            const hours = String(date.getUTCHours()).padStart(2, '0');
+            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+
+            return `${year}-${month}-${day} ${hours}:${minutes}Z`;
+        };
+
+        /**
+         * Escapes regex metacharacters so arbitrary text can be used safely in RegExp.
+         * @param {string} value - Raw text value.
+         * @returns {string} Regex-escaped text.
+         */
+        const escapeRegExp = (value) => {
+            return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        };
+
+        /**
          * Formats fuel data into a readable string and raw numbers for calculation.
          * Handles both remaining and cumulative fuel values with units.
          * @param {Object} fuel - The fuel object from the waypoint data.
@@ -350,9 +378,9 @@
         };
 
         /**
-         * Extracts routes.backup, flight.backup, and files listed in documents.backup from a ZIP-compatible archive.
+         * Extracts core backup files and documents from a ZIP-compatible archive.
          * @param {File} uploadedFile - User-selected archive file.
-         * @returns {Promise<{routesBackupText: string, flightBackupText: string|null, crewMembersBackupText: string|null, documentsBackupText: string|null, documentFiles: Array<{name: string, extension: string, blob: Blob, textContent: string|null}>}>}
+         * @returns {Promise<{routesBackupText: string, flightBackupText: string|null, crewMembersBackupText: string|null, documentsBackupText: string|null, notamsBackupText: string|null, notamKeywordsBackupText: string|null, documentFiles: Array<{name: string, extension: string, blob: Blob, textContent: string|null}>}>}
          * @throws {Error} If archive cannot be read or routes.backup is missing.
          */
         const readBackupFilesFromArchive = async (uploadedFile) => {
@@ -376,12 +404,16 @@
             const flightEntry = zipArchive.file('flight.backup');
             const crewMembersEntry = zipArchive.file('crewMembers.backup');
             const documentsEntry = zipArchive.file('documents.backup');
+            const notamsEntry = zipArchive.file('notams.backup');
+            const notamKeywordsEntry = zipArchive.file('notamKeywords.backup');
 
-            const [routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText] = await Promise.all([
+            const [routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, notamsBackupText, notamKeywordsBackupText] = await Promise.all([
                 routesEntry.async('string'),
                 flightEntry ? flightEntry.async('string') : Promise.resolve(null),
                 crewMembersEntry ? crewMembersEntry.async('string') : Promise.resolve(null),
-                documentsEntry ? documentsEntry.async('string') : Promise.resolve(null)
+                documentsEntry ? documentsEntry.async('string') : Promise.resolve(null),
+                notamsEntry ? notamsEntry.async('string') : Promise.resolve(null),
+                notamKeywordsEntry ? notamKeywordsEntry.async('string') : Promise.resolve(null)
             ]);
 
             const getArchiveBaseName = (archivePath) => archivePath.split('/').pop() || archivePath;
@@ -428,7 +460,15 @@
                 })
             )).filter(Boolean);
 
-            return { routesBackupText, flightBackupText, crewMembersBackupText, documentsBackupText, documentFiles };
+            return {
+                routesBackupText,
+                flightBackupText,
+                crewMembersBackupText,
+                documentsBackupText,
+                notamsBackupText,
+                notamKeywordsBackupText,
+                documentFiles
+            };
         };
 
         /**
@@ -470,6 +510,52 @@
                     return {
                         filename,
                         extension: resolvedExtension
+                    };
+                })
+                .filter(Boolean);
+        };
+
+        /**
+         * Parses notams.backup and returns a normalized NOTAM array.
+         * @param {string|null} jsonText - Raw JSON string from notams.backup.
+         * @returns {Array<Object>} Parsed NOTAM entries.
+         */
+        const processNotamData = (jsonText) => {
+            if (!jsonText) return [];
+
+            const parsedData = JSON.parse(jsonText);
+            if (!Array.isArray(parsedData)) return [];
+
+            return parsedData.filter((notamEntry) => notamEntry && typeof notamEntry === 'object');
+        };
+
+        /**
+         * Parses notamKeywords.backup and returns keyword-color definitions.
+         * @param {string|null} jsonText - Raw JSON string from notamKeywords.backup.
+         * @returns {Array<{keyword: string, colorHex: string}>} Keyword palette entries.
+         */
+        const processNotamKeywordsData = (jsonText) => {
+            if (!jsonText) return [];
+
+            const parsedData = JSON.parse(jsonText);
+            if (!Array.isArray(parsedData)) return [];
+
+            return parsedData
+                .map((keywordEntry) => {
+                    if (!keywordEntry || typeof keywordEntry !== 'object') return null;
+
+                    const keyword = typeof keywordEntry.keyword === 'string'
+                        ? keywordEntry.keyword.trim()
+                        : '';
+                    const colorHex = typeof keywordEntry.color?.hex === 'string'
+                        ? keywordEntry.color.hex.trim()
+                        : '';
+
+                    if (!keyword || !colorHex) return null;
+
+                    return {
+                        keyword,
+                        colorHex
                     };
                 })
                 .filter(Boolean);
@@ -2375,6 +2461,245 @@
             );
         };
 
+        /**
+         * Renders NOTAM text with keyword-based colors from notamKeywords.backup.
+         * @param {string} text - Raw NOTAM text.
+         * @param {Array<{keyword: string, colorHex: string}>} keywordPalette - NOTAM keyword color definitions.
+         * @returns {Array<React.ReactNode>|string} React fragments for highlighted text.
+         */
+        const renderHighlightedNotamText = (text, keywordPalette) => {
+            if (!text) return '-';
+            if (!Array.isArray(keywordPalette) || keywordPalette.length === 0) return text;
+
+            const dedupedKeywords = [];
+            const keywordColorByUpper = new Map();
+
+            keywordPalette.forEach((keywordEntry) => {
+                if (!keywordEntry || !keywordEntry.keyword || !keywordEntry.colorHex) return;
+
+                const upperKeyword = keywordEntry.keyword.toUpperCase();
+                if (!keywordColorByUpper.has(upperKeyword)) {
+                    keywordColorByUpper.set(upperKeyword, keywordEntry.colorHex);
+                    dedupedKeywords.push(keywordEntry.keyword);
+                }
+            });
+
+            if (dedupedKeywords.length === 0) return text;
+
+            const escapedKeywords = dedupedKeywords
+                .slice()
+                .sort((keywordA, keywordB) => keywordB.length - keywordA.length)
+                .map((keyword) => escapeRegExp(keyword));
+
+            const keywordRegex = new RegExp(`(${escapedKeywords.join('|')})`, 'gi');
+            const textSegments = String(text).split(keywordRegex);
+
+            return textSegments.map((segment, segmentIndex) => {
+                const upperSegment = segment.toUpperCase();
+                const segmentColor = keywordColorByUpper.get(upperSegment);
+
+                if (!segmentColor) {
+                    return segment;
+                }
+
+                return h('span', {
+                    key: `kw-${segmentIndex}`,
+                    className: "font-bold",
+                    style: { color: segmentColor }
+                }, segment);
+            });
+        };
+
+        /**
+         * StationsPage - Displays NOTAMs grouped by station and highlights key words.
+         * @param {Object} props - Component properties
+         * @param {Array<Object>} props.notams - Parsed notams.backup entries
+         * @param {Array<{keyword: string, colorHex: string}>} props.keywordPalette - Parsed notamKeywords.backup entries
+         */
+        const StationsPage = ({ notams, keywordPalette }) => {
+            const [selectedStationIndex, setSelectedStationIndex] = useState(0);
+            const [priorityFilter, setPriorityFilter] = useState('all');
+
+            if (!Array.isArray(notams) || notams.length === 0) {
+                return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
+                    h('h3', { className: "text-lg font-bold mb-2" }, "Stations"),
+                    h('p', null, "No notams.backup data found in this archive.")
+                );
+            }
+
+            const stationMap = new Map();
+
+            notams.forEach((notamEntry, index) => {
+                const stationCode = String(notamEntry?.icaoCode || notamEntry?.issuer || 'OTHER').trim().toUpperCase() || 'OTHER';
+                const stationName = String(notamEntry?.name || '').trim();
+
+                if (!stationMap.has(stationCode)) {
+                    stationMap.set(stationCode, {
+                        code: stationCode,
+                        name: stationName,
+                        items: []
+                    });
+                }
+
+                const stationEntry = stationMap.get(stationCode);
+                if (!stationEntry.name && stationName) {
+                    stationEntry.name = stationName;
+                }
+
+                stationEntry.items.push({
+                    ...notamEntry,
+                    _index: index
+                });
+            });
+
+            const stationGroups = Array.from(stationMap.values())
+                .sort((stationA, stationB) => stationA.code.localeCompare(stationB.code));
+
+            useEffect(() => {
+                setSelectedStationIndex((previousIndex) => {
+                    if (stationGroups.length === 0) return 0;
+                    return Math.min(previousIndex, stationGroups.length - 1);
+                });
+            }, [stationGroups.length]);
+
+            const safeStationIndex = Math.min(Math.max(selectedStationIndex, 0), stationGroups.length - 1);
+            const activeStation = stationGroups[safeStationIndex];
+
+            const sortedStationNotams = activeStation.items.slice().sort((notamA, notamB) => {
+                const timeA = Date.parse(notamA.startDate || '') || 0;
+                const timeB = Date.parse(notamB.startDate || '') || 0;
+                if (timeA !== timeB) return timeB - timeA;
+                return (notamA.sequenceId || 0) - (notamB.sequenceId || 0);
+            });
+
+            const normalizePriority = (priorityValue) => String(priorityValue || '').trim().toLowerCase();
+            const priorityLevels = ['low', 'medium', 'high'];
+
+            const notamsByLevel = {
+                low: sortedStationNotams.filter((notamEntry) => normalizePriority(notamEntry.priority) === 'low'),
+                medium: sortedStationNotams.filter((notamEntry) => normalizePriority(notamEntry.priority) === 'medium'),
+                high: sortedStationNotams.filter((notamEntry) => normalizePriority(notamEntry.priority) === 'high')
+            };
+
+            const visibleNotams = priorityFilter === 'all'
+                ? sortedStationNotams
+                : notamsByLevel[priorityFilter] || [];
+
+            const showPreviousStation = () => {
+                if (safeStationIndex <= 0) return;
+                setSelectedStationIndex(safeStationIndex - 1);
+            };
+
+            const showNextStation = () => {
+                if (safeStationIndex >= stationGroups.length - 1) return;
+                setSelectedStationIndex(safeStationIndex + 1);
+            };
+
+            return h('div', { className: "space-y-4 sm:space-y-6" },
+                h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('div', { className: "flex flex-wrap items-center justify-between gap-3" },
+                        h('h3', { className: "text-base sm:text-xl font-black text-gray-800" }, "Stations NOTAMs"),
+                        h('div', { className: "flex items-center gap-2" },
+                            h('span', { className: "px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 tracking-wide" }, `${stationGroups.length} Stations`),
+                            h('span', { className: "px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-700 tracking-wide" }, `${notams.length} NOTAMs`)
+                        )
+                    ),
+                    h('p', { className: "text-xs sm:text-sm text-gray-500 mt-3" }, "Keywords from notamKeywords.backup are color-highlighted in each NOTAM text.")
+                ),
+
+                h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('div', { className: "flex items-center justify-between gap-3 mb-3" },
+                        h('h4', { className: "text-sm font-black text-gray-700 uppercase tracking-wide" }, "Select Station"),
+                        h('span', { className: "text-xs font-bold text-gray-500" }, `${safeStationIndex + 1}/${stationGroups.length}`)
+                    ),
+                    h('div', { className: "flex gap-2 overflow-x-auto pb-1" },
+                        stationGroups.map((stationGroup, stationIndex) =>
+                            h('button', {
+                                key: stationGroup.code,
+                                type: 'button',
+                                onClick: () => setSelectedStationIndex(stationIndex),
+                                className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${stationIndex === safeStationIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                            }, stationGroup.code)
+                        )
+                    )
+                ),
+
+                h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('div', { className: "flex flex-wrap items-center justify-between gap-3" },
+                        h('div', { className: "flex items-center gap-2" },
+                            h('button', {
+                                type: 'button',
+                                onClick: showPreviousStation,
+                                disabled: safeStationIndex === 0,
+                                className: `h-10 w-10 rounded-full text-lg font-black transition ${safeStationIndex === 0 ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                                title: 'Previous station',
+                                'aria-label': 'Previous station'
+                            }, '←'),
+                            h('button', {
+                                type: 'button',
+                                onClick: showNextStation,
+                                disabled: safeStationIndex >= stationGroups.length - 1,
+                                className: `h-10 w-10 rounded-full text-lg font-black transition ${safeStationIndex >= stationGroups.length - 1 ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                                title: 'Next station',
+                                'aria-label': 'Next station'
+                            }, '→')
+                        ),
+                        h('div', { className: "text-right" },
+                            h('p', { className: "text-[10px] uppercase font-bold tracking-wider text-gray-400" }, "Station"),
+                            h('h4', { className: "text-lg sm:text-2xl font-black text-gray-800" }, activeStation.code),
+                            activeStation.name && h('p', { className: "text-sm sm:text-base text-gray-500 font-medium" }, activeStation.name)
+                        )
+                    ),
+
+                    h('div', { className: "flex flex-wrap items-center gap-2 mt-4" },
+                        h('span', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mr-1" }, "Level"),
+                        [
+                            { value: 'all', label: `All (${sortedStationNotams.length})` },
+                            { value: 'high', label: `High (${notamsByLevel.high.length})` },
+                            { value: 'medium', label: `Medium (${notamsByLevel.medium.length})` },
+                            { value: 'low', label: `Low (${notamsByLevel.low.length})` }
+                        ].map((filterOption) =>
+                            h('button', {
+                                key: filterOption.value,
+                                type: 'button',
+                                onClick: () => setPriorityFilter(filterOption.value),
+                                className: `px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition ${priorityFilter === filterOption.value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                            }, filterOption.label)
+                        )
+                    )
+                ),
+
+                h('div', {
+                    className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm space-y-3 sm:space-y-4"
+                },
+                    visibleNotams.length === 0
+                        ? h('div', { className: "text-center py-8 text-gray-500" },
+                            h('p', { className: "font-bold" }, "No NOTAMs match the selected level filter for this station.")
+                        )
+                        : h('div', { className: "space-y-3" },
+                            visibleNotams.map((notamEntry) =>
+                                h('div', {
+                                    key: `${activeStation.code}-${notamEntry._index}`,
+                                    className: "rounded-2xl border border-gray-200 bg-gray-50/80 p-3 sm:p-4"
+                                },
+                                    h('div', { className: "flex flex-wrap items-center gap-2 mb-2" },
+                                        h('span', { className: "text-xs font-black text-gray-800 bg-white border border-gray-200 rounded-lg px-2 py-1" }, notamEntry.key || 'No Key'),
+                                        notamEntry.category && h('span', { className: "text-[10px] uppercase font-bold tracking-wide text-gray-500 bg-white border border-gray-200 rounded-lg px-2 py-1" }, notamEntry.category),
+                                        notamEntry.priority && h('span', { className: "text-[10px] uppercase font-bold tracking-wide text-gray-500 bg-white border border-gray-200 rounded-lg px-2 py-1" }, String(notamEntry.priority))
+                                    ),
+                                    h('p', { className: "text-xs sm:text-sm text-gray-500 font-medium mb-2" },
+                                        `${formatUtcDateTime(notamEntry.startDate)} - ${formatUtcDateTime(notamEntry.endDate)}`
+                                    ),
+                                    h('p', { className: "text-sm sm:text-base text-gray-700 leading-relaxed whitespace-pre-wrap break-words" },
+                                        renderHighlightedNotamText(notamEntry.text, keywordPalette)
+                                    )
+                                )
+                            )
+                        )
+                )
+            );
+        };
+
         // ==========================================
         // COLUMN CONFIGURATION
         // ==========================================
@@ -2434,6 +2759,8 @@
             const [selectedPage, setSelectedPage] = useState('summary');
             const [documents, setDocuments] = useState([]);
             const [selectedDocumentIndex, setSelectedDocumentIndex] = useState(0);
+            const [notams, setNotams] = useState([]);
+            const [notamKeywords, setNotamKeywords] = useState([]);
 
             useEffect(() => {
                 return () => {
@@ -2455,10 +2782,19 @@
                 if (!selectedFile) return;
 
                 try {
-                    const { routesBackupText, flightBackupText, crewMembersBackupText, documentFiles } = await readBackupFilesFromArchive(selectedFile);
+                    const {
+                        routesBackupText,
+                        flightBackupText,
+                        crewMembersBackupText,
+                        notamsBackupText,
+                        notamKeywordsBackupText,
+                        documentFiles
+                    } = await readBackupFilesFromArchive(selectedFile);
                     const processedRoute = processFlightData(routesBackupText);
                     const processedSummary = processFlightSummaryData(flightBackupText);
                     const processedCrew = crewMembersBackupText ? JSON.parse(crewMembersBackupText) : null;
+                    const processedNotams = processNotamData(notamsBackupText);
+                    const processedNotamKeywords = processNotamKeywordsData(notamKeywordsBackupText);
                     const mappedDocuments = documentFiles.map((documentItem) => ({
                         name: documentItem.name,
                         extension: documentItem.extension,
@@ -2471,6 +2807,8 @@
                     setCrewMembersData(Array.isArray(processedCrew) ? processedCrew : null);
                     setDocuments(mappedDocuments);
                     setSelectedDocumentIndex(0);
+                    setNotams(processedNotams);
+                    setNotamKeywords(processedNotamKeywords);
                     setSelectedPage('summary');
                     setErrorMessage(null);
                 } catch (processingError) {
@@ -2518,6 +2856,13 @@
                         onClick: () => setSelectedPage('OFP')
                     }, 'OFP'),
                     h('button', {
+                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'stations' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                        onClick: () => {
+                            setSelectedPage('stations');
+                            setShowSettings(false);
+                        }
+                    }, 'Stations'),
+                    h('button', {
                         className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'documents' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
                         onClick: () => {
                             setSelectedPage('documents');
@@ -2542,6 +2887,11 @@
 
                             h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Documents"),
                             h('p', { className: "text-xs text-gray-400 mb-3" }, "Select documents directly on the Documents tab"),
+
+                            h('div', { className: "border-t border-gray-100 my-3" }),
+
+                            h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Stations"),
+                            h('p', { className: "text-xs text-gray-400 mb-3" }, "Keyword colors are loaded from notamKeywords.backup"),
 
                             h('div', { className: "border-t border-gray-100 my-3" }),
 
@@ -2582,6 +2932,8 @@
                                     setCrewMembersData(null);
                                     setDocuments([]);
                                     setSelectedDocumentIndex(0);
+                                    setNotams([]);
+                                    setNotamKeywords([]);
                                 },
                                 className: "w-full text-left text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
                             }, "Close Flight")
@@ -2600,7 +2952,7 @@
                     scheduledTimes: flightSummaryData?.scheduledTimes || null
                 }),
 
-                // Page content (Summary, OFP, or Documents)
+                // Page content (Summary, OFP, Stations, or Documents)
                 selectedPage === 'OFP'
                     ? h('div', { className: "space-y-4" },
                         h(OffBlockSection, {
@@ -2629,6 +2981,11 @@
                             route: routeData
                         })
                     )
+                    : selectedPage === 'stations'
+                        ? h(StationsPage, {
+                            notams,
+                            keywordPalette: notamKeywords
+                        })
                     : selectedPage === 'documents'
                         ? h(DocumentsPage, {
                             documents,
