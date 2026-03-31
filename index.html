@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlightLog Pro - Stable Edition</title>
+    <!-- React Dependencies -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"
+        crossorigin></script>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #F5F5F7;
+            font-family: -apple-system, system-ui, sans-serif;
+        }
+
+        .animate-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Hide number input arrows */
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        input[type="number"] {
+            -moz-appearance: textfield;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="root"></div>
+
+    <script>
+        // Extract required hooks and functions from the global React object
+        const { useState, createElement: h } = React;
+
+        // ==========================================
+        // CONSTANTS & CONFIGURATION
+        // ==========================================
+
+        // UI Style constants for consistent styling across components
+        const UI_STYLES = {
+            header: "text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-1",
+            label: "text-[10px] uppercase font-bold text-gray-400 tracking-wider",
+            value: "text-[10px] font-bold text-gray-700",
+            rowHeight: "h-7 flex items-center",
+            input: "w-full bg-gray-50 border-none rounded px-2 py-0.5 font-bold text-[9px] text-blue-600 placeholder:text-gray-300 focus:ring-1 focus:ring-blue-100 outline-none h-6",
+            button: "px-1 py-0 bg-gray-50 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 text-[8px] font-bold leading-none transition-colors"
+        };
+
+        // Fuel increment/decrement step size
+        const FUEL_STEP = 100;
+
+        // ==========================================
+        // UTILITY & FORMATTING FUNCTIONS
+        // ==========================================
+
+        /**
+         * Formats an ISO date string into a localized time string (HH:MMZ).
+         * Used for displaying planned and actual waypoint times.
+         * @param {string} isoString - The ISO date string to format.
+         * @returns {string} Formatted time string or "-" if invalid.
+         */
+        const formatTime = (isoString) => {
+            if (!isoString) return "-";
+            const date = new Date(isoString);
+            return isNaN(date) ? "-" : date.toLocaleTimeString([], {
+                timeZone: 'UTC',
+                hour: '2-digit',
+                minute: '2-digit'
+            }) + 'Z';
+        };
+
+        /**
+         * Formats fuel data into a readable string and raw numbers for calculation.
+         * Handles both remaining and cumulative fuel values with units.
+         * @param {Object} fuel - The fuel object from the waypoint data.
+         * @returns {Object|null} Formatted fuel data with display strings and raw numbers.
+         */
+        const formatFuel = (fuel) => {
+            if (!fuel) return null;
+
+            const formatFuelValue = (value, unit) => {
+                if (value === undefined) return null;
+                return `${value} ${unit || ''}`.trim();
+            };
+
+            return {
+                remaining: formatFuelValue(fuel.remaining, fuel.unit),
+                cumulated: formatFuelValue(fuel.cumulated, fuel.unit),
+                numRemaining: fuel.remaining,
+                numCumulated: fuel.cumulated
+            };
+        };
+
+        /**
+         * Converts a time string (HH:MMZ) to total minutes since midnight.
+         * Used for calculating time differences between planned and actual times.
+         * @param {string} timeString - Time string in HH:MMZ format.
+         * @returns {number|null} Total minutes or null if invalid.
+         */
+        const timeToMinutes = (timeString) => {
+            if (!timeString || timeString === "-") return null;
+            const timePart = timeString.split('Z')[0];
+            const [hours, minutes] = timePart.split(':').map(Number);
+            return isNaN(hours) || isNaN(minutes) ? null : hours * 60 + minutes;
+        };
+
+        /**
+         * Formats a numeric difference with a plus/minus sign and optional unit.
+         * Used for displaying deviations from planned values.
+         * @param {number|null} difference - The numeric difference to format.
+         * @param {string} unit - Optional unit string (e.g., "min", "kg").
+         * @returns {string} Formatted difference string.
+         */
+        const formatDiff = (difference, unit = "") => {
+            if (difference === null || difference === undefined || isNaN(difference)) return "-";
+            const sign = difference > 0 ? "+" : (difference < 0 ? "" : "");
+            const formattedValue = `${sign}${difference}`;
+            return unit ? `${formattedValue} ${unit}` : formattedValue;
+        };
+
+        /**
+         * Extracts track value from nested tracks array structure.
+         * Handles complex paths like "tracks.segment.true" or "tracks.outbound.magnetic".
+         * @param {Object} waypoint - The waypoint object containing tracks data.
+         * @param {string} path - The field path (e.g., "tracks.segment.true").
+         * @returns {Object|null} The track value object with {value, unit} or null.
+         */
+        const extractTrackValue = (waypoint, path) => {
+            if (!waypoint || !path.startsWith('tracks.')) return null;
+
+            const parts = path.split('.');
+            if (parts.length !== 3) return null;
+
+            const [tracksKey, segmentKey, typeKey] = parts;
+            const tracksObj = waypoint.tracks;
+
+            if (!tracksObj || !tracksObj[segmentKey] || !Array.isArray(tracksObj[segmentKey])) {
+                return null;
+            }
+
+            const trackArray = tracksObj[segmentKey];
+            const trackObj = trackArray.find(track => track.type === typeKey);
+
+            return trackObj || null;
+        };
+
+        /**
+         * Formats a numeric value with thousand separators for better readability.
+         * @param {number|string} value - The number to format.
+         * @returns {string} Formatted number string.
+         */
+        const formatNumber = (value) => {
+            if (value === null || value === undefined || value === "") return "-";
+            const number = Number(value);
+            if (isNaN(number)) return String(value);
+            return new Intl.NumberFormat('en-US', { maximumFractionDigits: 9 }).format(number);
+        };
+
+        /**
+         * Normalizes unit strings to human-friendly display format.
+         * Converts abbreviations to proper symbols (e.g., "deg" to "°").
+         * @param {string} unit - The unit string to normalize.
+         * @param {string} value - The value to combine with the unit.
+         * @returns {string} Formatted value with normalized unit.
+         */
+        const formatUnit = (unit, value) => {
+            if (!unit) return value;
+            const normalizedUnit = String(unit).trim().toLowerCase();
+
+            const unitMappings = {
+                'deg': '°',
+                'degree': '°',
+                '°': '°'
+            };
+
+            const displayUnit = unitMappings[normalizedUnit] || unit;
+            return `${value}${displayUnit}`;
+        };
+
+        /**
+         * Formats any waypoint property value, handling various data types.
+         * Supports nested objects, arrays, numbers, strings, and special value/unit objects.
+         * @param {*} value - The value to format.
+         * @returns {string} Formatted display string.
+         */
+        const formatWaypointValue = (value) => {
+            if (value === null || value === undefined || value === '') return '-';
+
+            if (Array.isArray(value)) {
+                if (value.length === 0) return '-';
+                const formattedItems = value.map(formatWaypointValue).filter(item => item && item !== '-');
+                return formattedItems.length > 0 ? formattedItems.join(', ') : '-';
+            }
+
+            if (typeof value === 'object') {
+                // Handle value/unit objects (e.g., {value: 123, unit: "kg"})
+                if (value.value !== undefined) {
+                    const formattedValue = formatNumber(value.value);
+                    return formatUnit(value.unit || value.units, formattedValue);
+                }
+
+                // Handle plain objects by flattening to key-value pairs
+                const validEntries = Object.entries(value).filter(([key, val]) =>
+                    val !== null && val !== undefined && val !== ''
+                );
+
+                if (validEntries.length === 0) return '-';
+                if (validEntries.length === 1) {
+                    return formatWaypointValue(validEntries[0][1]);
+                }
+
+                return validEntries.map(([key, val]) =>
+                    `${key}: ${formatWaypointValue(val)}`
+                ).join(', ');
+            }
+
+            if (typeof value === 'number') {
+                return formatNumber(value);
+            }
+
+            if (typeof value === 'string') {
+                // Try to parse as number if it looks numeric
+                const numericValue = Number(value);
+                if (!isNaN(numericValue) && value.trim().length > 0) {
+                    return formatNumber(numericValue);
+                }
+                return value;
+            }
+
+            return String(value);
+        };
+
+        /**
+         * Retrieves a nested value from an object using dot notation.
+         * Handles special cases like coordinates and track values.
+         * @param {Object} object - The object to extract value from.
+         * @param {string} path - Dot-separated path to the value.
+         * @returns {string} Formatted value string.
+         */
+        const getNestedValue = (object, path) => {
+            let rawValue;
+
+            if (path === 'coordinates') {
+                // Special handling: combine latitude and longitude
+                const latitude = object.latitude;
+                const longitude = object.longitude;
+                if (latitude !== undefined && longitude !== undefined) {
+                    return `${formatWaypointValue(latitude)}, ${formatWaypointValue(longitude)}`;
+                }
+                return '-';
+            } else if (path.startsWith('tracks.')) {
+                // Special handling for track values
+                rawValue = extractTrackValue(object, path);
+            } else {
+                // Standard nested property access
+                rawValue = path.split('.').reduce((obj, key) =>
+                    (obj ? obj[key] : undefined), object
+                );
+            }
+
+            return formatWaypointValue(rawValue);
+        };
+
+        // ==========================================
+        // BUSINESS LOGIC & DATA PROCESSING
+        // ==========================================
+
+        /**
+         * Processes raw JSON flight data and extracts the main route information.
+         * Parses the uploaded file content, validates the structure, and prepares
+         * waypoint data for display by sorting them chronologically.
+         *
+         * @param {string} jsonText - The raw JSON string from the uploaded file.
+         * @returns {Object} The processed main route data with sorted waypoints.
+         * @throws {Error} If the JSON is invalid or missing required route structure.
+         */
+        const processFlightData = (jsonText) => {
+            const parsedData = JSON.parse(jsonText);
+            const routes = Array.isArray(parsedData) ? parsedData : [parsedData];
+
+            if (routes.length === 0) {
+                throw new Error("The file does not contain any routes.");
+            }
+
+            // Select the primary route (prefer ID 0) or fallback to first available
+            const mainRoute = routes.find(route => route.id === 0) || routes[0];
+
+            // Ensure waypoints exist and sort them by sequence for logical flight path
+            if (mainRoute && Array.isArray(mainRoute.waypoints)) {
+                mainRoute.waypoints.sort((waypointA, waypointB) =>
+                    (waypointA.sequenceId || 0) - (waypointB.sequenceId || 0)
+                );
+            } else {
+                // Provide fallback empty array to prevent rendering errors
+                mainRoute.waypoints = [];
+            }
+
+            return mainRoute;
+        };
+
+        // ==========================================
+        // UI COMPONENTS
+        // ==========================================
+
+        /**
+         * Icon Component - Renders SVG icons from a predefined library.
+         * Provides consistent iconography throughout the application.
+         *
+         * @param {Object} props - Component properties
+         * @param {string} props.name - Name of the icon to render
+         * @param {string} props.className - Additional CSS classes for styling
+         */
+        const Icon = ({ name, className = "" }) => {
+            // Icon library with SVG path definitions
+            const iconPaths = {
+                plane: "M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.3c.4-.2.6-.6.5-1.1z",
+                upload: "M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M12 12v9m-4-4l4 4 4-4",
+                clock: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zm0-16v6l4 2",
+                droplet: "M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5s-3 3.5-3 5.5a7 7 0 0 0 7 7z",
+                settings: "M12.22 2h-.44a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2a2 2 0 0 1-2 2a2 2 0 0 0-2 2v.44a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2a2 2 0 0 1 2 2a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2a2 2 0 0 1 2-2a2 2 0 0 0 2-2v-.44a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2a2 2 0 0 1-2-2a2 2 0 0 0-2-2zM9 12a3 3 0 1 1 6 0a3 3 0 0 1-6 0z"
+            };
+
+            return h('svg', {
+                width: 24,
+                height: 24,
+                viewBox: "0 0 24 24",
+                fill: "none",
+                stroke: "currentColor",
+                strokeWidth: 2,
+                strokeLinecap: "round",
+                strokeLinejoin: "round",
+                className
+            }, h('path', { d: iconPaths[name] || "" }));
+        };
+
+        /**
+         * WelcomeScreen Component - Initial screen shown when no flight data is loaded.
+         * Provides file upload interface and displays any loading errors.
+         *
+         * @param {Object} props - Component properties
+         * @param {Function} props.onFileSelected - Callback when user selects a file
+         * @param {string|null} props.error - Error message to display, if any
+         */
+        const WelcomeScreen = ({ onFileSelected, error }) => {
+            return h('div', {
+                className: "min-h-screen flex flex-col items-center justify-center p-6 text-center"
+            },
+                h('div', { className: "bg-white p-12 rounded-[3rem] shadow-xl animate-in" },
+                    h(Icon, { name: "upload", className: "w-16 h-16 text-blue-600 mx-auto mb-6" }),
+                    h('h1', { className: "text-3xl font-black mb-4" }, "FlightLog Pro"),
+                    h('p', { className: "text-gray-500 mb-8" }, "Upload your .backup route file"),
+                    h('label', {
+                        className: "bg-blue-600 text-white px-8 py-4 rounded-2xl font-bold cursor-pointer hover:bg-blue-700 transition-all block"
+                    },
+                        "Choose File",
+                        h('input', {
+                            type: 'file',
+                            className: "hidden",
+                            onChange: onFileSelected
+                        })
+                    ),
+                    error && h('p', {
+                        className: "text-red-500 mt-4 text-sm font-medium"
+                    }, error)
+                )
+            );
+        };
+
+        /**
+         * RouteHeader Component - Displays route information and action buttons.
+         * Shows destination airport details and provides controls for closing route
+         * or toggling settings panel.
+         *
+         * @param {Object} props - Component properties
+         * @param {Object} props.route - Route data object with airport information
+         * @param {Function} props.onClose - Callback to close the current route
+         * @param {Function} props.onSettingsToggle - Callback to toggle settings panel
+         */
+        const RouteHeader = ({ route, onClose, onSettingsToggle }) => {
+            const airportName = route.airport?.name || "Unknown Route";
+            const icaoCode = route.airport?.icaoCode || "N/A";
+
+            return h('div', {
+                className: "bg-white p-8 rounded-[2rem] shadow-sm mb-8 flex justify-between items-center"
+            },
+                h('div', null,
+                    h('p', { className: "text-blue-600 text-[10px] font-bold uppercase tracking-widest" }, "Destination"),
+                    h('h2', { className: "text-3xl font-black" }, airportName),
+                    h('span', { className: "text-gray-400 font-bold" }, icaoCode)
+                ),
+                h('div', { className: "flex gap-4" },
+                    h('button', {
+                        onClick: onSettingsToggle,
+                        className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-50 p-3 rounded-xl transition-colors flex items-center"
+                    }, h(Icon, { name: "settings", className: "w-5 h-5" })),
+                    h('button', {
+                        onClick: onClose,
+                        className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-50 px-6 py-2 rounded-xl transition-colors"
+                    }, "Close")
+                )
+            );
+        };
+
+        /**
+         * WaypointCard Component - Displays detailed information for a single flight waypoint.
+         * Shows planned vs actual times, fuel consumption, and other flight parameters.
+         * Includes interactive controls for entering actual flight data.
+         *
+         * @param {Object} props - Component properties
+         * @param {Object} props.waypoint - Waypoint data object
+         * @param {number} props.index - Position in the waypoint sequence
+         * @param {Array<string>} props.selectedColumns - Additional columns to display
+         */
+        const WaypointCard = ({ waypoint, index, selectedColumns }) => {
+            // Format planned data
+            const plannedTimeStr = formatTime(waypoint.passingByDate);
+            const fuelData = formatFuel(waypoint.fuel);
+
+            // State for actual flight data input
+            const [actualData, setActualData] = useState({
+                time: "",
+                used: "",
+                remaining: ""
+            });
+
+            // Track focus state for smart input behavior
+            const [inputFocusState, setInputFocusState] = useState({
+                usedFocused: false,
+                remainingFocused: false
+            });
+
+            // Calculate differences between planned and actual values
+            const plannedTimeMinutes = timeToMinutes(plannedTimeStr);
+            const actualTimeMinutes = timeToMinutes(actualData.time);
+            const timeDifference = (plannedTimeMinutes !== null && actualTimeMinutes !== null)
+                ? actualTimeMinutes - plannedTimeMinutes
+                : null;
+
+            const fuelUsedDifference = (fuelData?.numCumulated !== undefined && actualData.used !== "")
+                ? Number(actualData.used) - fuelData.numCumulated
+                : null;
+
+            const fuelRemainingDifference = (fuelData?.numRemaining !== undefined && actualData.remaining !== "")
+                ? Number(actualData.remaining) - fuelData.numRemaining
+                : null;
+
+            // ==========================================
+            // TIME INPUT HELPERS
+            // ==========================================
+
+            /**
+             * Parses a time string into hours and minutes components.
+             * @param {string} timeString - Time in HH:MM format
+             * @returns {Object} Object with hours and minutes properties
+             */
+            const parseTimeComponents = (timeString) => {
+                if (!timeString) return { hours: 0, minutes: 0 };
+                const [hours, minutes] = timeString.split(':').map(Number);
+                return {
+                    hours: isNaN(hours) ? 0 : hours,
+                    minutes: isNaN(minutes) ? 0 : minutes
+                };
+            };
+
+            /**
+             * Formats hours and minutes back into HH:MM string format.
+             * @param {number} hours - Hours (0-23)
+             * @param {number} minutes - Minutes (0-59)
+             * @returns {string} Formatted time string
+             */
+            const formatTimeComponents = (hours, minutes) => {
+                return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+            };
+
+            /**
+             * Increments the actual time by one minute.
+             * Uses planned time as base if no actual time is set.
+             */
+            const incrementTime = () => {
+                const baseTime = actualData.time || plannedTimeStr.split('Z')[0];
+                const { hours, minutes } = parseTimeComponents(baseTime);
+
+                let newMinutes = minutes + 1;
+                let newHours = hours;
+
+                if (newMinutes >= 60) {
+                    newMinutes = 0;
+                    newHours = (newHours + 1) % 24;
+                }
+
+                setActualData(prev => ({
+                    ...prev,
+                    time: formatTimeComponents(newHours, newMinutes)
+                }));
+            };
+
+            /**
+             * Decrements the actual time by one minute.
+             * Uses planned time as base if no actual time is set.
+             */
+            const decrementTime = () => {
+                const baseTime = actualData.time || plannedTimeStr.split('Z')[0];
+                const { hours, minutes } = parseTimeComponents(baseTime);
+
+                let newMinutes = minutes - 1;
+                let newHours = hours;
+
+                if (newMinutes < 0) {
+                    newMinutes = 59;
+                    newHours = (newHours - 1 + 24) % 24;
+                }
+
+                setActualData(prev => ({
+                    ...prev,
+                    time: formatTimeComponents(newHours, newMinutes)
+                }));
+            };
+
+            // ==========================================
+            // FUEL INPUT HELPERS
+            // ==========================================
+
+            /**
+             * Increments fuel used by the standard step amount.
+             * On first use with empty field, rounds planned value up to next step boundary.
+             */
+            const incrementFuelUsed = () => {
+                if (!actualData.used) {
+                    // Initialize with rounded-up planned value
+                    const plannedValue = fuelData.numCumulated;
+                    const nextStepBoundary = Math.ceil(plannedValue / FUEL_STEP) * FUEL_STEP;
+                    setActualData(prev => ({ ...prev, used: String(nextStepBoundary) }));
+                } else {
+                    // Increment existing value
+                    const currentValue = Number(actualData.used);
+                    setActualData(prev => ({ ...prev, used: String(currentValue + FUEL_STEP) }));
+                }
+            };
+
+            /**
+             * Decrements fuel used by the standard step amount.
+             * On first use with empty field, rounds planned value down to previous step boundary.
+             */
+            const decrementFuelUsed = () => {
+                if (!actualData.used) {
+                    // Initialize with rounded-down planned value
+                    const plannedValue = fuelData.numCumulated;
+                    const prevStepBoundary = Math.floor(plannedValue / FUEL_STEP) * FUEL_STEP;
+                    setActualData(prev => ({
+                        ...prev,
+                        used: String(Math.max(0, prevStepBoundary))
+                    }));
+                } else {
+                    // Decrement existing value
+                    const currentValue = Number(actualData.used);
+                    setActualData(prev => ({
+                        ...prev,
+                        used: String(Math.max(0, currentValue - FUEL_STEP))
+                    }));
+                }
+            };
+
+            /**
+             * Increments remaining fuel by the standard step amount.
+             * On first use with empty field, rounds planned value up to next step boundary.
+             */
+            const incrementFuelRemaining = () => {
+                if (!actualData.remaining) {
+                    // Initialize with rounded-up planned value
+                    const plannedValue = fuelData.numRemaining;
+                    const nextStepBoundary = Math.ceil(plannedValue / FUEL_STEP) * FUEL_STEP;
+                    setActualData(prev => ({ ...prev, remaining: String(nextStepBoundary) }));
+                } else {
+                    // Increment existing value
+                    const currentValue = Number(actualData.remaining);
+                    setActualData(prev => ({ ...prev, remaining: String(currentValue + FUEL_STEP) }));
+                }
+            };
+
+            /**
+             * Decrements remaining fuel by the standard step amount.
+             * On first use with empty field, rounds planned value down to previous step boundary.
+             */
+            const decrementFuelRemaining = () => {
+                if (!actualData.remaining) {
+                    // Initialize with rounded-down planned value
+                    const plannedValue = fuelData.numRemaining;
+                    const prevStepBoundary = Math.floor(plannedValue / FUEL_STEP) * FUEL_STEP;
+                    setActualData(prev => ({
+                        ...prev,
+                        remaining: String(Math.max(0, prevStepBoundary))
+                    }));
+                } else {
+                    // Decrement existing value
+                    const currentValue = Number(actualData.remaining);
+                    setActualData(prev => ({
+                        ...prev,
+                        remaining: String(Math.max(0, currentValue - FUEL_STEP))
+                    }));
+                }
+            };
+
+            // ==========================================
+            // INPUT CHANGE HANDLERS
+            // ==========================================
+
+            /**
+             * Handles changes to the fuel used input field.
+             * Provides smart initialization on first input.
+             */
+            const handleFuelUsedChange = (event) => {
+                const newValue = event.target.value;
+                if (actualData.used === "" && newValue !== "") {
+                    // Pre-fill with planned value on first input
+                    setActualData(prev => ({ ...prev, used: String(fuelData.numCumulated) }));
+                } else {
+                    setActualData(prev => ({ ...prev, used: newValue }));
+                }
+            };
+
+            /**
+             * Handles changes to the fuel remaining input field.
+             * Provides smart initialization on first input.
+             */
+            const handleFuelRemainingChange = (event) => {
+                const newValue = event.target.value;
+                if (actualData.remaining === "" && newValue !== "") {
+                    // Pre-fill with planned value on first input
+                    setActualData(prev => ({ ...prev, remaining: String(fuelData.numRemaining) }));
+                } else {
+                    setActualData(prev => ({ ...prev, remaining: newValue }));
+                }
+            };
+
+            // ==========================================
+            // STYLING HELPERS
+            // ==========================================
+
+            /**
+             * Determines color styling for difference values based on whether they're positive, negative, or zero.
+             * @param {number} difference - The difference value to style
+             * @returns {string} CSS class for coloring the difference
+             */
+            const getDifferenceColor = (difference) => {
+                if (difference === 0) return "text-gray-400";
+                return difference > 0 ? "text-red-500" : "text-emerald-500";
+            };
+
+            // Calculate grid layout based on selected columns
+            const baseColumnCount = 4; // Label + Time + Used + Remaining
+            const extraColumnCount = selectedColumns?.length || 0;
+            const gridColumnTemplate = `grid-cols-[56px_72px_72px_72px${'_72px'.repeat(extraColumnCount)}]`;
+
+            // ==========================================
+            // RENDER COMPONENT
+            // ==========================================
+
+            return h('div', { className: "bg-white p-6 rounded-3xl shadow-sm flex items-start gap-6" },
+                // Waypoint index (hidden for now)
+                h('div', { className: "hidden w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center font-black text-gray-300 mt-1" }, index + 1),
+
+                // Main content area
+                h('div', { className: "flex-1 overflow-x-auto" },
+                    // Waypoint title
+                    h('div', { className: "font-black text-xl text-gray-800 mb-2 truncate" }, waypoint.title || "Unnamed Fix"),
+
+                    // Data grid
+                    h('div', { className: `grid ${gridColumnTemplate} gap-x-6 gap-y-0 min-w-max` },
+
+                        // Header Row
+                        h('div', { className: "contents" },
+                            h('div', null), // Empty for label column
+                            h('div', { className: UI_STYLES.header }, "Time"),
+                            fuelData?.cumulated && h('div', { className: UI_STYLES.header }, "Used"),
+                            fuelData?.remaining && h('div', { className: UI_STYLES.header }, "Remaining"),
+                            selectedColumns.map(col => h('div', {
+                                key: col,
+                                className: UI_STYLES.header
+                            }, getColumnLabel(col)))
+                        ),
+
+                        // Planned Values Row
+                        h('div', { className: "contents" },
+                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.label }, "Planned"),
+                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value }, plannedTimeStr),
+                            fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " font-bold text-[9px]" }, fuelData.cumulated),
+                            fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " font-bold text-[9px]" }, fuelData.remaining),
+                            selectedColumns.map(col => h('div', {
+                                key: col,
+                                className: UI_STYLES.rowHeight + " " + UI_STYLES.value
+                            }, getNestedValue(waypoint, col) || "-"))
+                        ),
+
+                        // Actual Values Row (Interactive)
+                        h('div', { className: "contents" },
+                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.label + " text-blue-500" }, "Actual"),
+
+                            // Time input with increment/decrement controls
+                            h('div', { className: UI_STYLES.rowHeight + " flex gap-0.5 items-center" },
+                                h('input', {
+                                    type: 'text',
+                                    className: UI_STYLES.input,
+                                    placeholder: "HH:MM",
+                                    value: actualData.time,
+                                    onChange: (e) => {
+                                        const newValue = e.target.value;
+                                        if (actualData.time === "" && newValue !== "") {
+                                            // Pre-fill with planned time on first input
+                                            const timeWithoutZ = plannedTimeStr.split('Z')[0];
+                                            setActualData(prev => ({ ...prev, time: timeWithoutZ }));
+                                        } else {
+                                            setActualData(prev => ({ ...prev, time: newValue }));
+                                        }
+                                    }
+                                }),
+                                h('div', { className: "flex flex-col gap-0.5" },
+                                    h('button', {
+                                        onClick: incrementTime,
+                                        className: UI_STYLES.button
+                                    }, "▲"),
+                                    h('button', {
+                                        onClick: decrementTime,
+                                        className: UI_STYLES.button
+                                    }, "▼")
+                                )
+                            ),
+
+                            // Fuel used input (conditional rendering)
+                            fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " flex gap-0.5 items-center" },
+                                h('input', {
+                                    type: 'number',
+                                    className: UI_STYLES.input,
+                                    placeholder: "Used",
+                                    value: actualData.used,
+                                    onChange: handleFuelUsedChange
+                                }),
+                                h('div', { className: "flex flex-col gap-0.5" },
+                                    h('button', {
+                                        onClick: incrementFuelUsed,
+                                        className: UI_STYLES.button
+                                    }, "▲"),
+                                    h('button', {
+                                        onClick: decrementFuelUsed,
+                                        className: UI_STYLES.button
+                                    }, "▼")
+                                )
+                            ),
+
+                            // Fuel remaining input (conditional rendering)
+                            fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " flex gap-0.5 items-center" },
+                                h('input', {
+                                    type: 'number',
+                                    className: UI_STYLES.input,
+                                    placeholder: "Rem",
+                                    value: actualData.remaining,
+                                    onChange: handleFuelRemainingChange
+                                }),
+                                h('div', { className: "flex flex-col gap-0.5" },
+                                    h('button', {
+                                        onClick: incrementFuelRemaining,
+                                        className: UI_STYLES.button
+                                    }, "▲"),
+                                    h('button', {
+                                        onClick: decrementFuelRemaining,
+                                        className: UI_STYLES.button
+                                    }, "▼")
+                                )
+                            ),
+
+                            // Empty cells for dynamic columns
+                            selectedColumns.map(col => h('div', { key: col, className: UI_STYLES.rowHeight }))
+                        ),
+
+                        // Difference Row
+                        h('div', { className: "contents" },
+                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.label }, "Diff"),
+                            h('div', { className: UI_STYLES.rowHeight + " font-bold text-[10px] " + getDifferenceColor(timeDifference) }, formatDiff(timeDifference, "min")),
+                            fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " font-bold text-[10px] " + getDifferenceColor(fuelUsedDifference) }, formatDiff(fuelUsedDifference)),
+                            fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " font-bold text-[10px] " + getDifferenceColor(-fuelRemainingDifference) }, formatDiff(fuelRemainingDifference)),
+                            // Empty cells for dynamic columns
+                            selectedColumns.map(col => h('div', { key: col, className: UI_STYLES.rowHeight }))
+                        )
+                    )
+                )
+            );
+        };
+
+        // ==========================================
+        // COLUMN CONFIGURATION
+        // ==========================================
+
+        /**
+         * Static column definitions for additional flight data display.
+         * Each column specifies a data path, human-readable label, and default visibility.
+         * These can be toggled on/off in the settings panel.
+         */
+        const STATIC_COLUMNS = [
+            { path: 'averages.altitude', label: 'Altitude (Avg)', defaultVisible: false },
+            { path: 'averages.groundSpeed', label: 'Ground Speed (Avg)', defaultVisible: false },
+            { path: 'averages.isaDeviation', label: 'ISA Deviation', defaultVisible: false },
+            { path: 'indicatedAirSpeed.value', label: 'Indicated Air Speed', defaultVisible: false },
+            { path: 'tracks.outbound.magnetic', label: 'Track Outbound (Magnetic)', defaultVisible: false },
+            { path: 'tracks.outbound.true', label: 'Track Outbound (True)', defaultVisible: false },
+            { path: 'tracks.segment.magnetic', label: 'Track Segment (Magnetic)', defaultVisible: false },
+            { path: 'tracks.segment.true', label: 'Track Segment (True)', defaultVisible: false },
+            { path: 'tropopause.value', label: 'Tropopause', defaultVisible: false },
+            { path: 'temperature.value', label: 'Temperature', defaultVisible: false },
+            { path: 'windComponent.value', label: 'Wind Component', defaultVisible: false },
+            { path: 'windShear.value', label: 'Wind Shear', defaultVisible: false },
+            { path: 'coordinates', label: 'Coordinates', defaultVisible: false },
+            { path: 'averages.machSpeed', label: 'Mach Speed (Avg)', defaultVisible: false },
+            { path: 'averages.minimumSafeAltitude.value', label: 'Min Safe Altitude', defaultVisible: false },
+            { path: 'groundDistance.value', label: 'Ground Distance', defaultVisible: false },
+            { path: 'averages.trueAirSpeed', label: 'True Air Speed (Avg)', defaultVisible: false }
+        ];
+
+        /**
+         * Gets the human-readable label for a column path.
+         * Falls back to a formatted version of the path if no label is found.
+         * @param {string} path - The column data path
+         * @returns {string} Human-readable column label
+         */
+        const getColumnLabel = (path) => {
+            const columnDefinition = STATIC_COLUMNS.find(col => col.path === path);
+            return columnDefinition ? columnDefinition.label : path.split('.').pop();
+        };
+
+        // ==========================================
+        // MAIN APPLICATION COMPONENT
+        // ==========================================
+
+        /**
+         * Main App Component - Root component managing the flight log application state.
+         * Handles file uploads, route data management, and UI state for settings panel.
+         */
+        const App = () => {
+            // Application state
+            const [routeData, setRouteData] = useState(null);
+            const [errorMessage, setErrorMessage] = useState(null);
+            const [showSettings, setShowSettings] = useState(false);
+            const [selectedColumns, setSelectedColumns] = useState([]);
+            const [selectedPage, setSelectedPage] = useState('waypoints');
+
+            /**
+             * Handles file upload and processing.
+             * Reads the uploaded file, processes the flight data, and updates application state.
+             * @param {Event} event - File input change event
+             */
+            const handleFileUpload = async (event) => {
+                const selectedFile = event.target.files[0];
+                if (!selectedFile) return;
+
+                try {
+                    const fileContent = await selectedFile.text();
+                    const processedRoute = processFlightData(fileContent);
+
+                    setRouteData(processedRoute);
+                    setErrorMessage(null);
+                } catch (processingError) {
+                    setErrorMessage("Error loading file: " + processingError.message);
+                }
+
+                // Reset file input
+                event.target.value = '';
+            };
+
+            /**
+             * Toggles visibility of a column in the waypoint display.
+             * @param {string} columnPath - The path of the column to toggle
+             */
+            const toggleColumnVisibility = (columnPath) => {
+                setSelectedColumns(prevSelected =>
+                    prevSelected.includes(columnPath)
+                        ? prevSelected.filter(path => path !== columnPath)
+                        : [...prevSelected, columnPath]
+                );
+            };
+
+            // Show welcome screen if no route data is loaded
+            if (!routeData) {
+                return h(WelcomeScreen, {
+                    onFileSelected: handleFileUpload,
+                    error: errorMessage
+                });
+            }
+
+            // Main application interface
+            return h('div', { className: "max-w-6xl mx-auto p-6 animate-in" },
+
+                // Route header with destination info and controls
+                h(RouteHeader, {
+                    route: routeData,
+                    onClose: () => setRouteData(null),
+                    onSettingsToggle: () => setShowSettings(!showSettings)
+                }),
+
+                // Subpage menu (Waypoints / Summary)
+                h('div', { className: "flex items-center gap-3 mb-6" },
+                    h('button', {
+                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'waypoints' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                        onClick: () => setSelectedPage('waypoints')
+                    }, 'Waypoints'),
+                    h('button', {
+                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'summary' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                        onClick: () => setSelectedPage('summary')
+                    }, 'Summary')
+                ),
+
+                // Settings panel for column visibility (conditionally rendered)
+                showSettings && h('div', { className: "bg-white p-8 rounded-[2rem] shadow-sm mb-8 animate-in" },
+                    h('h3', { className: "font-black text-lg mb-4" }, "Column Settings"),
+                    h('div', { className: "grid grid-cols-2 md:grid-cols-4 gap-4" },
+                        STATIC_COLUMNS
+                            .slice()
+                            .sort((a, b) => a.label.localeCompare(b.label))
+                            .map(column => h('label', {
+                                key: column.path,
+                                className: "flex items-center gap-3 cursor-pointer group"
+                            },
+                                h('input', {
+                                    type: 'checkbox',
+                                    className: "w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500",
+                                    checked: selectedColumns.includes(column.path),
+                                    onChange: () => toggleColumnVisibility(column.path)
+                                }),
+                                h('span', { className: "text-sm font-bold text-gray-500 group-hover:text-gray-800" }, column.label)
+                            ))
+                    )
+                ),
+
+                // Page content (Waypoints or Summary)
+                selectedPage === 'waypoints'
+                    ? h('div', { className: "space-y-4" },
+                        (routeData.waypoints || []).map((waypoint, index) =>
+                            h(WaypointCard, {
+                                key: waypoint.UUID || index,
+                                waypoint: waypoint,
+                                index: index,
+                                selectedColumns: selectedColumns
+                            })
+                        )
+                    )
+                    : h('div', { className: "bg-white p-8 rounded-[2rem] shadow-sm text-center text-gray-500" },
+                        h('h3', { className: "text-lg font-bold mb-2" }, "Summary"),
+                        h('p', null, "Summary content will be available here soon.")
+                    )
+            );
+        };
+
+        // ==========================================
+        // APPLICATION INITIALIZATION
+        // ==========================================
+
+        // Create React root and render the main App component
+        // This initializes the FlightLog Pro application
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(h(App));
+    </script>
+</body>
+
+</html>
