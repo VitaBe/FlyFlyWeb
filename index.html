@@ -190,7 +190,7 @@
             if (value === null || value === undefined || value === "") return "-";
             const number = Number(value);
             if (isNaN(number)) return String(value);
-            return new Intl.NumberFormat('en-US', { maximumFractionDigits: 9 }).format(number);
+            return new Intl.NumberFormat('en-US', { maximumFractionDigits: 7 }).format(number);
         };
 
         /**
