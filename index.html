@@ -523,7 +523,7 @@
          * @param {Object|null} props.scheduledTimes - Scheduled time data from flight.backup
          * @param {Function} props.onClose - Callback to close the current route
          */
-        const RouteHeader = ({ route, atcCallsign, flightNumber, originIcao, destinationIcao, ofpVersion, scheduledTimes, onClose }) => {
+        const RouteHeader = ({ route, atcCallsign, flightNumber, originIcao, destinationIcao, ofpVersion, scheduledTimes }) => {
             const headerTitle = `${flightNumber || 'N/A'} - ${ofpVersion || 'N/A'}`;
             const headerSubtitle = `${originIcao || 'N/A'} ${destinationIcao || 'N/A'}`;
 
@@ -591,12 +591,6 @@
                         )
                     )
                 ),
-                h('div', { className: "flex gap-2 sm:gap-4 shrink-0" },
-                    h('button', {
-                        onClick: onClose,
-                        className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-50 px-4 sm:px-6 py-2 rounded-xl transition-colors"
-                    }, "Close")
-                )
             );
         };
 
@@ -1270,8 +1264,15 @@
                         showSettings && h('div', {
                             className: "absolute top-11 right-0 z-20 bg-white border border-gray-200 rounded-2xl shadow-xl p-4 w-[min(92vw,440px)] animate-in"
                         },
-                            h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-3" }, "Columns"),
-                            h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
+                            // Flight Summary section
+                            h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Flight Summary"),
+                            h('p', { className: "text-xs text-gray-400 mb-3" }, "No settings"),
+
+                            h('div', { className: "border-t border-gray-100 my-3" }),
+
+                            // OFP section
+                            h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-3" }, "OFP Columns"),
+                            h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3" },
                                 STATIC_COLUMNS
                                     .slice()
                                     .sort((a, b) => a.label.localeCompare(b.label))
@@ -1287,7 +1288,19 @@
                                         }),
                                         h('span', { className: "text-sm font-bold text-gray-500 group-hover:text-gray-800" }, column.label)
                                     ))
-                            )
+                            ),
+
+                            h('div', { className: "border-t border-gray-100 mt-1 mb-3" }),
+
+                            // Close flight action
+                            h('button', {
+                                onClick: () => {
+                                    setShowSettings(false);
+                                    setRouteData(null);
+                                    setFlightSummaryData(null);
+                                },
+                                className: "w-full text-left text-sm font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-2 rounded-lg transition-colors"
+                            }, "Close Flight")
                         )
                     )
                 ),
@@ -1300,11 +1313,7 @@
                     originIcao: flightSummaryData?.originAirport?.icaoCode || null,
                     destinationIcao: flightSummaryData?.destinationAirport?.icaoCode || null,
                     ofpVersion: flightSummaryData?.ofpVersion || null,
-                    scheduledTimes: flightSummaryData?.scheduledTimes || null,
-                    onClose: () => {
-                        setRouteData(null);
-                        setFlightSummaryData(null);
-                    }
+                    scheduledTimes: flightSummaryData?.scheduledTimes || null
                 }),
 
                 // Page content (Waypoints or Summary)
