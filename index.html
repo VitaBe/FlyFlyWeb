@@ -365,7 +365,7 @@
                 const archiveBuffer = await uploadedFile.arrayBuffer();
                 zipArchive = await JSZip.loadAsync(archiveBuffer);
             } catch (archiveError) {
-                throw new Error("Invalid archive file. Please upload a ZIP/.effarchive export.");
+                throw new Error("Invalid archive file. Please upload a .effarchive export.");
             }
 
             const routesEntry = zipArchive.file('routes.backup');
@@ -630,7 +630,7 @@
                 h('div', { className: "bg-white p-6 sm:p-12 rounded-3xl sm:rounded-[3rem] shadow-xl animate-in w-full max-w-sm sm:max-w-md" },
                     h(Icon, { name: "upload", className: "w-12 h-12 sm:w-16 sm:h-16 text-blue-600 mx-auto mb-4 sm:mb-6" }),
                     h('h1', { className: "text-2xl sm:text-3xl font-black mb-3 sm:mb-4" }, "FlightLog Pro"),
-                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload a ZIP/.effarchive export containing routes.backup and flight.backup"),
+                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload a .effarchive export containing routes.backup and flight.backup"),
                     h('label', {
                         className: "bg-blue-600 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-bold cursor-pointer hover:bg-blue-700 transition-all block"
                     },
