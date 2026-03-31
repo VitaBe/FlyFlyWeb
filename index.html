@@ -1579,6 +1579,8 @@
          * @param {Function} props.onSelectDocument - Callback to switch selected document
          */
         const DocumentsPage = ({ documents, selectedDocumentIndex, onSelectDocument }) => {
+            const [isListExpanded, setIsListExpanded] = useState(false);
+
             if (!documents || documents.length === 0) {
                 return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
                     h('h3', { className: "text-lg font-bold mb-2" }, "Documents"),
@@ -1609,7 +1611,15 @@
 
             return h('div', { className: "space-y-4" },
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
-                    h('div', { className: "flex flex-wrap gap-2" },
+                    h('button', {
+                        type: 'button',
+                        onClick: () => setIsListExpanded(!isListExpanded),
+                        className: "w-full flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition"
+                    },
+                        h('h3', { className: "text-sm font-bold text-gray-800" }, `All Documents (${documents.length})`),
+                        h('span', { className: `text-gray-400 text-lg transition-transform ${isListExpanded ? 'rotate-180' : ''}` }, '▼')
+                    ),
+                    isListExpanded && h('div', { className: "flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-100" },
                         documents.map((documentItem, index) =>
                             h('button', {
                                 key: `${documentItem.name}-${index}`,
