@@ -2517,7 +2517,7 @@
          * @param {Array<{keyword: string, colorHex: string}>} props.keywordPalette - Parsed notamKeywords.backup entries
          */
         const StationsPage = ({ notams, keywordPalette }) => {
-            const [selectedStationIndex, setSelectedStationIndex] = useState(0);
+            const [selectedTraversalIndex, setSelectedTraversalIndex] = useState(0);
             const [priorityFilter, setPriorityFilter] = useState('all');
 
             if (!Array.isArray(notams) || notams.length === 0) {
@@ -2588,15 +2588,19 @@
             const stationGroups = Array.from(stationMap.values())
                 .sort((stationA, stationB) => stationA.code.localeCompare(stationB.code));
 
-            const stationIndexByCode = new Map(
-                stationGroups.map((stationEntry, stationIndex) => [stationEntry.code, stationIndex])
+            const roleOrder = ['departure', 'destination', 'alternate', 'etops', 'enroute', 'fir', 'other'];
+            const stationPrimaryRoleMap = new Map(
+                stationGroups.map((stationEntry) => {
+                    const stationRoles = stationRolesMap.get(stationEntry.code);
+                    const primaryRole = roleOrder.find((roleKey) => stationRoles?.has(roleKey)) || 'other';
+                    return [stationEntry.code, primaryRole];
+                })
             );
 
-            const roleOrder = ['departure', 'destination', 'alternate', 'etops', 'enroute', 'fir', 'other'];
             const stationsByRole = roleOrder
                 .map((roleKey) => {
                     const stationsForRole = stationGroups
-                        .filter((stationEntry) => stationRolesMap.get(stationEntry.code)?.has(roleKey));
+                        .filter((stationEntry) => stationPrimaryRoleMap.get(stationEntry.code) === roleKey);
 
                     return {
                         roleKey,
@@ -2606,15 +2610,30 @@
                 })
                 .filter((roleEntry) => roleEntry.stations.length > 0);
 
-            useEffect(() => {
-                setSelectedStationIndex((previousIndex) => {
-                    if (stationGroups.length === 0) return 0;
-                    return Math.min(previousIndex, stationGroups.length - 1);
-                });
-            }, [stationGroups.length]);
+            const groupedTraversal = stationsByRole.flatMap((roleEntry) =>
+                roleEntry.stations.map((stationEntry) => ({
+                    roleKey: roleEntry.roleKey,
+                    stationCode: stationEntry.code
+                }))
+            );
 
-            const safeStationIndex = Math.min(Math.max(selectedStationIndex, 0), stationGroups.length - 1);
-            const activeStation = stationGroups[safeStationIndex];
+            const traversalIndexByRoleAndCode = new Map(
+                groupedTraversal.map((traversalEntry, traversalIndex) => [
+                    `${traversalEntry.roleKey}::${traversalEntry.stationCode}`,
+                    traversalIndex
+                ])
+            );
+
+            useEffect(() => {
+                setSelectedTraversalIndex((previousIndex) => {
+                    if (groupedTraversal.length === 0) return 0;
+                    return Math.min(previousIndex, groupedTraversal.length - 1);
+                });
+            }, [groupedTraversal.length]);
+
+            const safeTraversalIndex = Math.min(Math.max(selectedTraversalIndex, 0), groupedTraversal.length - 1);
+            const activeTraversalEntry = groupedTraversal[safeTraversalIndex];
+            const activeStation = stationMap.get(activeTraversalEntry.stationCode);
             const activeStationRoles = roleOrder
                 .filter((roleKey) => stationRolesMap.get(activeStation.code)?.has(roleKey))
                 .map((roleKey) => stationRoleLabels[roleKey]);
@@ -2640,13 +2659,13 @@
                 : notamsByLevel[priorityFilter] || [];
 
             const showPreviousStation = () => {
-                if (safeStationIndex <= 0) return;
-                setSelectedStationIndex(safeStationIndex - 1);
+                if (safeTraversalIndex <= 0) return;
+                setSelectedTraversalIndex(safeTraversalIndex - 1);
             };
 
             const showNextStation = () => {
-                if (safeStationIndex >= stationGroups.length - 1) return;
-                setSelectedStationIndex(safeStationIndex + 1);
+                if (safeTraversalIndex >= groupedTraversal.length - 1) return;
+                setSelectedTraversalIndex(safeTraversalIndex + 1);
             };
 
             return h('div', { className: "space-y-4 sm:space-y-6" },
@@ -2664,20 +2683,20 @@
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                     h('div', { className: "flex items-center justify-between gap-3 mb-3" },
                         h('h4', { className: "text-sm font-black text-gray-700 uppercase tracking-wide" }, "Select Station Grouped By Function"),
-                        h('span', { className: "text-xs font-bold text-gray-500" }, `${safeStationIndex + 1}/${stationGroups.length}`)
+                        h('span', { className: "text-xs font-bold text-gray-500" }, `${safeTraversalIndex + 1}/${groupedTraversal.length}`)
                     ),
                     h('div', { className: "space-y-3" },
                         stationsByRole.map((roleEntry) =>
                             h('div', { key: roleEntry.roleKey },
                                 h('p', { className: "text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-1.5" }, roleEntry.roleLabel),
-                                h('div', { className: "flex gap-2 overflow-x-auto pb-1" },
+                                h('div', { className: "flex flex-wrap gap-2" },
                                     roleEntry.stations.map((stationGroup) => {
-                                        const stationIndex = stationIndexByCode.get(stationGroup.code);
+                                        const traversalIndex = traversalIndexByRoleAndCode.get(`${roleEntry.roleKey}::${stationGroup.code}`);
                                         return h('button', {
                                             key: `${roleEntry.roleKey}-${stationGroup.code}`,
                                             type: 'button',
-                                            onClick: () => setSelectedStationIndex(stationIndex),
-                                            className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${stationIndex === safeStationIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                                            onClick: () => setSelectedTraversalIndex(traversalIndex),
+                                            className: `px-3 py-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${traversalIndex === safeTraversalIndex ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
                                         }, stationGroup.code);
                                     })
                                 )
@@ -2692,16 +2711,16 @@
                             h('button', {
                                 type: 'button',
                                 onClick: showPreviousStation,
-                                disabled: safeStationIndex === 0,
-                                className: `h-10 w-10 rounded-full text-lg font-black transition ${safeStationIndex === 0 ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                                disabled: safeTraversalIndex === 0,
+                                className: `h-10 w-10 rounded-full text-lg font-black transition ${safeTraversalIndex === 0 ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
                                 title: 'Previous station',
                                 'aria-label': 'Previous station'
                             }, '←'),
                             h('button', {
                                 type: 'button',
                                 onClick: showNextStation,
-                                disabled: safeStationIndex >= stationGroups.length - 1,
-                                className: `h-10 w-10 rounded-full text-lg font-black transition ${safeStationIndex >= stationGroups.length - 1 ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
+                                disabled: safeTraversalIndex >= groupedTraversal.length - 1,
+                                className: `h-10 w-10 rounded-full text-lg font-black transition ${safeTraversalIndex >= groupedTraversal.length - 1 ? 'bg-gray-100 text-gray-300 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`,
                                 title: 'Next station',
                                 'aria-label': 'Next station'
                             }, '→')
