@@ -510,9 +510,8 @@
         };
 
         /**
-         * RouteHeader Component - Displays route information and action buttons.
-         * Shows destination airport details and provides controls for closing route
-         * or toggling settings panel.
+         * RouteHeader Component - Displays route information and close action.
+         * Shows destination airport details and top-level timing overview.
          *
          * @param {Object} props - Component properties
          * @param {Object} props.route - Route data object with airport information
@@ -523,9 +522,8 @@
          * @param {string|null} props.ofpVersion - OFP version from flight.backup
          * @param {Object|null} props.scheduledTimes - Scheduled time data from flight.backup
          * @param {Function} props.onClose - Callback to close the current route
-         * @param {Function} props.onSettingsToggle - Callback to toggle settings panel
          */
-        const RouteHeader = ({ route, atcCallsign, flightNumber, originIcao, destinationIcao, ofpVersion, scheduledTimes, onClose, onSettingsToggle }) => {
+        const RouteHeader = ({ route, atcCallsign, flightNumber, originIcao, destinationIcao, ofpVersion, scheduledTimes, onClose }) => {
             const headerTitle = `${flightNumber || 'N/A'} - ${ofpVersion || 'N/A'}`;
             const headerSubtitle = `${originIcao || 'N/A'} ${destinationIcao || 'N/A'}`;
 
@@ -594,10 +592,6 @@
                     )
                 ),
                 h('div', { className: "flex gap-2 sm:gap-4 shrink-0" },
-                    h('button', {
-                        onClick: onSettingsToggle,
-                        className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-50 p-3 rounded-xl transition-colors flex items-center"
-                    }, h(Icon, { name: "settings", className: "w-5 h-5" })),
                     h('button', {
                         onClick: onClose,
                         className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-gray-50 px-4 sm:px-6 py-2 rounded-xl transition-colors"
@@ -1257,12 +1251,47 @@
                 h('div', { className: "flex items-center gap-3 mb-4 sm:mb-6" },
                     h('button', {
                         className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'summary' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
-                        onClick: () => setSelectedPage('summary')
+                        onClick: () => {
+                            setSelectedPage('summary');
+                            setShowSettings(false);
+                        }
                     }, 'Flight Summary'),
                     h('button', {
                         className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'OFP' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
                         onClick: () => setSelectedPage('OFP')
                     }, 'OFP')
+                ),
+
+                // OFP-only compact settings control (positioned above header)
+                selectedPage === 'OFP' && h('div', { className: "relative flex justify-end mb-3 sm:mb-4" },
+                    h('button', {
+                        onClick: () => setShowSettings(!showSettings),
+                        className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-white border border-gray-200 hover:border-gray-300 p-2 rounded-lg transition-colors shadow-sm",
+                        'aria-label': 'Toggle OFP column settings',
+                        title: 'Column settings'
+                    }, h(Icon, { name: "settings", className: "w-4 h-4" })),
+                    showSettings && h('div', {
+                        className: "absolute top-11 right-0 z-20 bg-white border border-gray-200 rounded-2xl shadow-xl p-4 w-[min(92vw,440px)] animate-in"
+                    },
+                        h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-3" }, "Columns"),
+                        h('div', { className: "grid grid-cols-1 sm:grid-cols-2 gap-3" },
+                            STATIC_COLUMNS
+                                .slice()
+                                .sort((a, b) => a.label.localeCompare(b.label))
+                                .map(column => h('label', {
+                                    key: column.path,
+                                    className: "flex items-center gap-2.5 cursor-pointer group"
+                                },
+                                    h('input', {
+                                        type: 'checkbox',
+                                        className: "w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500",
+                                        checked: selectedColumns.includes(column.path),
+                                        onChange: () => toggleColumnVisibility(column.path)
+                                    }),
+                                    h('span', { className: "text-sm font-bold text-gray-500 group-hover:text-gray-800" }, column.label)
+                                ))
+                        )
+                    )
                 ),
 
                 // Route header with destination info and controls
@@ -1277,31 +1306,8 @@
                     onClose: () => {
                         setRouteData(null);
                         setFlightSummaryData(null);
-                    },
-                    onSettingsToggle: () => setShowSettings(!showSettings)
+                    }
                 }),
-
-                // Settings panel for column visibility (conditionally rendered)
-                showSettings && h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm mb-4 sm:mb-8 animate-in" },
-                    h('h3', { className: "font-black text-lg mb-4" }, "Column Settings"),
-                    h('div', { className: "grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4" },
-                        STATIC_COLUMNS
-                            .slice()
-                            .sort((a, b) => a.label.localeCompare(b.label))
-                            .map(column => h('label', {
-                                key: column.path,
-                                className: "flex items-center gap-3 cursor-pointer group"
-                            },
-                                h('input', {
-                                    type: 'checkbox',
-                                    className: "w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500",
-                                    checked: selectedColumns.includes(column.path),
-                                    onChange: () => toggleColumnVisibility(column.path)
-                                }),
-                                h('span', { className: "text-sm font-bold text-gray-500 group-hover:text-gray-800" }, column.label)
-                            ))
-                    )
-                ),
 
                 // Page content (Waypoints or Summary)
                 selectedPage === 'OFP'
