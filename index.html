@@ -393,6 +393,54 @@
             return hours * 60 + minutes + Math.round(seconds / 60);
         };
 
+        /**
+         * Sanitizes a limited HTML fragment from flight.backup while preserving
+         * simple formatting such as line breaks, bold text, and bullet lists.
+         * @param {string} htmlText - Raw HTML-like text from flight.backup.
+         * @returns {string} Sanitized HTML safe for display.
+         */
+        const sanitizeRichText = (htmlText) => {
+            if (!htmlText || typeof htmlText !== 'string') return '';
+
+            const parser = new DOMParser();
+            const documentFragment = parser.parseFromString(`<div>${htmlText}</div>`, 'text/html');
+            const container = documentFragment.body.firstElementChild;
+
+            if (!container) return '';
+
+            const allowedTags = new Set(['B', 'STRONG', 'BR', 'UL', 'OL', 'LI', 'P']);
+
+            const sanitizeNode = (node) => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    return document.createTextNode(node.textContent || '');
+                }
+
+                if (node.nodeType !== Node.ELEMENT_NODE) {
+                    return document.createDocumentFragment();
+                }
+
+                const tagName = node.tagName.toUpperCase();
+                const sanitizedChildren = Array.from(node.childNodes).map(sanitizeNode);
+
+                if (!allowedTags.has(tagName)) {
+                    const fragment = document.createDocumentFragment();
+                    sanitizedChildren.forEach((childNode) => fragment.appendChild(childNode));
+                    return fragment;
+                }
+
+                const cleanElement = document.createElement(tagName.toLowerCase());
+                sanitizedChildren.forEach((childNode) => cleanElement.appendChild(childNode));
+                return cleanElement;
+            };
+
+            const safeWrapper = document.createElement('div');
+            Array.from(container.childNodes)
+                .map(sanitizeNode)
+                .forEach((childNode) => safeWrapper.appendChild(childNode));
+
+            return safeWrapper.innerHTML;
+        };
+
         // ==========================================
         // UI COMPONENTS
         // ==========================================
@@ -938,6 +986,11 @@
 
             const summaryInfo = summary.summaryAdditionalInfo || {};
             const etopsMinutes = parseDurationToMinutes(summaryInfo.diversion);
+            const optiClimbHtml = sanitizeRichText(
+                summary.optiClimb || summary.recommendations?.opti?.find((entry) =>
+                    /opticlimb/i.test(entry?.title || '') || /opticlimb/i.test(entry?.text || '')
+                )?.text || ''
+            );
 
             const rowsLeft = [
                 { label: 'AC type', value: summary.acType || '-' },
@@ -977,22 +1030,32 @@
                 h('p', { className: "text-gray-700 font-extrabold text-sm sm:text-xl leading-tight" }, value)
             );
 
-            return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
-                h('div', { className: "flex items-center gap-3 mb-4 sm:mb-6" },
-                    h('h3', { className: "text-base sm:text-xl font-black text-gray-800" }, "Flight Plan Summary"),
-                    summaryInfo.isETOPS && h('span', { className: "px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 tracking-wide" }, "ETOPS")
+            return h('div', { className: "space-y-4 sm:space-y-6" },
+                h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('div', { className: "flex items-center gap-3 mb-4 sm:mb-6" },
+                        h('h3', { className: "text-base sm:text-xl font-black text-gray-800" }, "Flight Plan Summary"),
+                        summaryInfo.isETOPS && h('span', { className: "px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 tracking-wide" }, "ETOPS")
+                    ),
+
+                    h('div', { className: "grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-10" },
+                        h('div', { className: "space-y-1" }, rowsLeft.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value }))),
+                        h('div', { className: "space-y-1" }, rowsRight.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value })))
+                    ),
+
+                    h('div', { className: "border-t border-gray-200 my-6 sm:my-8" }),
+
+                    h('div', { className: "grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-10" },
+                        h('div', { className: "space-y-1" }, bottomLeft.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value }))),
+                        h('div', { className: "space-y-1" }, bottomRight.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value })))
+                    )
                 ),
 
-                h('div', { className: "grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-10" },
-                    h('div', { className: "space-y-1" }, rowsLeft.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value }))),
-                    h('div', { className: "space-y-1" }, rowsRight.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value })))
-                ),
-
-                h('div', { className: "border-t border-gray-200 my-6 sm:my-8" }),
-
-                h('div', { className: "grid grid-cols-1 xl:grid-cols-2 gap-6 xl:gap-10" },
-                    h('div', { className: "space-y-1" }, bottomLeft.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value }))),
-                    h('div', { className: "space-y-1" }, bottomRight.map((row) => h(SummaryRow, { key: row.label, label: row.label, value: row.value })))
+                optiClimbHtml && h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6 uppercase" }, "OptiClimb"),
+                    h('div', {
+                        className: "text-sm sm:text-base text-gray-700 leading-relaxed [&_b]:font-extrabold [&_strong]:font-extrabold [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2",
+                        dangerouslySetInnerHTML: { __html: optiClimbHtml }
+                    })
                 )
             );
         };

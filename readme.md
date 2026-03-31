@@ -9,6 +9,7 @@ The application is built as a **Single File Application (SFA)**, meaning all log
 
 * **Archive Import:** Opens ZIP-compatible exports, extracts `routes.backup` and `flight.backup`, and parses both files.  
 * **Flight Summary:** Builds the Summary tab from `flight.backup` (aircraft data, airports/runways, distances, ETOPS and dispatcher details).  
+* **Operational Notes:** Displays `flight.backup` OptiClimb content, including climb guidance, passenger announcement, and ground services notes.  
 * **Route Selection:** Automatically identifies the primary flight route (searching for id: 0\) while providing fallbacks for other data formats.  
 * **Data Chronology:** Implements a sorting algorithm that organizes waypoints by their sequenceId to ensure the flight path is displayed in the correct order, regardless of the JSON's internal sorting.  
 * **Aviation Metrics Visualization:** Extracts and formats specific aviation data displayed in WaypointCard rows:  
