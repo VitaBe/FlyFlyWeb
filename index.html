@@ -516,14 +516,18 @@
          *
          * @param {Object} props - Component properties
          * @param {Object} props.route - Route data object with airport information
+         * @param {string|null} props.atcCallsign - ATC callsign from flight.backup
+         * @param {string|null} props.flightNumber - Flight number from flight.backup
+         * @param {string|null} props.originIcao - Origin ICAO code from flight.backup
+         * @param {string|null} props.destinationIcao - Destination ICAO code from flight.backup
          * @param {string|null} props.ofpVersion - OFP version from flight.backup
          * @param {Object|null} props.scheduledTimes - Scheduled time data from flight.backup
          * @param {Function} props.onClose - Callback to close the current route
          * @param {Function} props.onSettingsToggle - Callback to toggle settings panel
          */
-        const RouteHeader = ({ route, ofpVersion, scheduledTimes, onClose, onSettingsToggle }) => {
-            const airportName = route.airport?.name || "Unknown Route";
-            const icaoCode = route.airport?.icaoCode || "N/A";
+        const RouteHeader = ({ route, atcCallsign, flightNumber, originIcao, destinationIcao, ofpVersion, scheduledTimes, onClose, onSettingsToggle }) => {
+            const headerTitle = `${flightNumber || 'N/A'} - ${ofpVersion || 'N/A'}`;
+            const headerSubtitle = `${originIcao || 'N/A'} ${destinationIcao || 'N/A'}`;
 
             const formatUtcTimeOnly = (isoString) => {
                 if (!isoString) return '-';
@@ -563,12 +567,10 @@
                 className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm mb-4 sm:mb-8 flex flex-wrap justify-between items-center gap-4"
             },
                 h('div', { className: "min-w-0" },
-                    h('p', { className: "text-blue-600 text-[10px] font-bold uppercase tracking-widest" }, "Destination"),
-                    h('h2', { className: "text-xl sm:text-3xl font-black truncate" }, airportName),
+                    h('p', { className: "text-blue-600 text-[10px] font-bold uppercase tracking-widest" }, atcCallsign || "-"),
+                    h('h2', { className: "text-xl sm:text-3xl font-black truncate" }, headerTitle),
                     h('div', { className: "flex flex-wrap items-center gap-2 text-gray-400 font-bold" },
-                        h('span', null, icaoCode),
-                        ofpVersion && h('span', { className: "text-gray-300" }, "•"),
-                        ofpVersion && h('span', { className: "uppercase tracking-wide" }, ofpVersion)
+                        h('span', { className: "uppercase tracking-wide" }, headerSubtitle)
                     ),
                     h('div', { className: "space-y-3 mt-3 sm:mt-4" },
                         h('div', { className: "grid grid-cols-3 gap-x-3 sm:gap-x-4" },
@@ -1266,6 +1268,10 @@
                 // Route header with destination info and controls
                 h(RouteHeader, {
                     route: routeData,
+                    atcCallsign: flightSummaryData?.atcCallsign || null,
+                    flightNumber: flightSummaryData?.flightNumber || null,
+                    originIcao: flightSummaryData?.originAirport?.icaoCode || null,
+                    destinationIcao: flightSummaryData?.destinationAirport?.icaoCode || null,
                     ofpVersion: flightSummaryData?.ofpVersion || null,
                     scheduledTimes: flightSummaryData?.scheduledTimes || null,
                     onClose: () => {
