@@ -14,6 +14,8 @@ The application is built as a **Single File Application (SFA)**, meaning all log
 * **Data Chronology:** Implements a sorting algorithm that organizes waypoints by their sequenceId to ensure the flight path is displayed in the correct order, regardless of the JSON's internal sorting.  
 * **Aviation Metrics Visualization:** Extracts and formats specific aviation data displayed in WaypointCard rows:  
   * **Base Columns (Always Display):** Waypoint title, planned time (HH:MM), fuel used, and fuel remaining.  
+  * **Waypoint Detail Popup:** Clicking a waypoint title opens a modal with full waypoint details and all non-empty STATIC_COLUMNS values.
+  * **Shared Actual Inputs:** The modal includes the same Actual row controls (time, fuel used, fuel remaining with ▲/▼ steppers). Values are synchronized with the waypoint card in real time.
   * **Dynamic Column Selection:** Users can toggle 19 additional fields via the Settings panel (gear icon):
     * Flight Parameters: Tropopause, Indicated Air Speed, Temperature, Wind Shear, Wind Component
     * Navigation: Ground Distance, Latitude, Longitude, Track data (segment & outbound in true/magnetic)
@@ -35,7 +37,7 @@ The code is divided into four distinct logical layers:
 
 * **Utility Functions:** Small, pure functions for string and number formatting (formatTime, formatFuel, formatNumber, formatUnit), value extraction (getNestedValue, extractTrackValue), and deep object navigation.  
 * **Data Processing:** A robust parser (processFlightData) that handles error boundaries, JSON parsing, route extraction, and waypoint sorting.  
-* **UI Components:** Modular React components (WelcomeScreen, RouteHeader, WaypointCard) that ensure the interface is maintainable and extensible.  
+* **UI Components:** Modular React components (WelcomeScreen, RouteHeader, WaypointCard, WaypointDetailModal) that ensure the interface is maintainable and extensible.  
 * **Static Column System:** A hardcoded array (STATIC_COLUMNS) defining 19 available aviation metrics fields with human-readable labels. Users toggle column visibility through the Settings panel, which updates the component grid dynamically.  
 * **App Controller:** The main App component managing the lifecycle (Upload → Process → Display → Reset) with state for route data, selected columns, and UI visibility.
 
@@ -118,7 +120,8 @@ The app expects a JSON array or object containing:
 5. **Enter Actual Data:** For each waypoint, input actual flight times and fuel values in the blue input fields. The "Diff" row automatically calculates and color-codes the variance:
    - **Green** = Performance exceeded expectation (less fuel used, earlier arrival)
    - **Red** = Performance below expectation (more fuel used, later arrival)
-6. **Close Flight:** Click the "Close" button to reset and upload a new file.
+6. **Open Waypoint Popup:** Click a waypoint title to open the detail popup. You can edit ACTUAL time/fuel there with the same steppers, and values stay synced with the OFP card.
+7. **Close Flight:** Click the "Close" button to reset and upload a new file.
 
 ## **How to Run**
 
