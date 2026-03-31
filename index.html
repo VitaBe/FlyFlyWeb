@@ -197,6 +197,60 @@
             return unit ? `${formattedValue} ${unit}` : formattedValue;
         };
 
+        const parseTimeComponents = (timeString) => {
+            if (!timeString) return { hours: 0, minutes: 0 };
+            const [hours, minutes] = timeString.split(':').map(Number);
+            return {
+                hours: isNaN(hours) ? 0 : hours,
+                minutes: isNaN(minutes) ? 0 : minutes
+            };
+        };
+
+        const formatTimeComponents = (hours, minutes) => {
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        };
+
+        const shiftTimeByMinute = (timeString, minuteDelta) => {
+            const { hours, minutes } = parseTimeComponents(timeString);
+            const totalMinutes = (hours * 60 + minutes + minuteDelta + 1440) % 1440;
+            const nextHours = Math.floor(totalMinutes / 60);
+            const nextMinutes = totalMinutes % 60;
+            return formatTimeComponents(nextHours, nextMinutes);
+        };
+
+        const getDifferenceColor = (difference) => {
+            if (difference === 0) return "text-blue-500";
+            return difference > 0 ? "text-red-500" : "text-emerald-500";
+        };
+
+        const renderValueWithDiff = (plannedValue, actualValue, difference, unit = "", invertDiffColor = false) => {
+            if (difference === null || difference === undefined || isNaN(difference)) {
+                return actualValue || plannedValue;
+            }
+
+            const colorTarget = invertDiffColor ? -difference : difference;
+            return h('span', null,
+                actualValue || plannedValue,
+                h('span', {
+                    className: "font-bold text-[10px] " + getDifferenceColor(colorTarget)
+                }, ` (${formatDiff(difference, unit)})`)
+            );
+        };
+
+        const getSteppedFuelValue = (currentValue, plannedValue, direction) => {
+            if (plannedValue === undefined) return currentValue;
+
+            if (currentValue === "" || currentValue === null || currentValue === undefined) {
+                const boundary = direction > 0
+                    ? Math.ceil(plannedValue / FUEL_STEP) * FUEL_STEP
+                    : Math.floor(plannedValue / FUEL_STEP) * FUEL_STEP;
+                return String(Math.max(0, boundary));
+            }
+
+            const nextValue = Number(currentValue) + (direction * FUEL_STEP);
+            return String(Math.max(0, nextValue));
+        };
+
         /**
          * Extracts track value from nested tracks array structure.
          * Handles complex paths like "tracks.segment.true" or "tracks.outbound.magnetic".
@@ -210,7 +264,7 @@
             const parts = path.split('.');
             if (parts.length !== 3) return null;
 
-            const [tracksKey, segmentKey, typeKey] = parts;
+            const [, segmentKey, typeKey] = parts;
             const tracksObj = waypoint.tracks;
 
             if (!tracksObj || !tracksObj[segmentKey] || !Array.isArray(tracksObj[segmentKey])) {
@@ -735,20 +789,17 @@
         };
 
         /**
-         * RouteHeader Component - Displays route information and close action.
-         * Shows destination airport details and top-level timing overview.
+         * RouteHeader Component - Displays top-level flight identification and timing overview.
          *
          * @param {Object} props - Component properties
-         * @param {Object} props.route - Route data object with airport information
          * @param {string|null} props.atcCallsign - ATC callsign from flight.backup
          * @param {string|null} props.flightNumber - Flight number from flight.backup
          * @param {string|null} props.originIcao - Origin ICAO code from flight.backup
          * @param {string|null} props.destinationIcao - Destination ICAO code from flight.backup
          * @param {string|null} props.ofpVersion - OFP version from flight.backup
          * @param {Object|null} props.scheduledTimes - Scheduled time data from flight.backup
-         * @param {Function} props.onClose - Callback to close the current route
          */
-        const RouteHeader = ({ route, atcCallsign, flightNumber, originIcao, destinationIcao, ofpVersion, scheduledTimes }) => {
+        const RouteHeader = ({ atcCallsign, flightNumber, originIcao, destinationIcao, ofpVersion, scheduledTimes }) => {
             const headerTitle = `${flightNumber || 'N/A'} - ${ofpVersion || 'N/A'}`;
             const headerSubtitle = `${originIcao || 'N/A'} ${destinationIcao || 'N/A'}`;
 
@@ -837,11 +888,6 @@
                 value: getNestedValue(waypoint, col.path)
             })).filter(f => f.value && f.value !== '-');
 
-            const getDiffColor = (diff) => {
-                if (diff === 0) return "text-blue-500";
-                return diff > 0 ? "text-red-500" : "text-emerald-500";
-            };
-
             const plannedTimeMinutes = timeToMinutes(plannedTimeStr);
             const actualTimeMinutes = timeToMinutes(actualData.time);
             // EFB fuel check diffs — same Actual − Planned convention as WaypointCard.
@@ -905,7 +951,7 @@
                                     h('button', { onClick: incrementTime, className: UI_STYLES.button }, "▲")
                                 )
                             ),
-                            h('div', { key: "t3", className: "font-bold text-[10px] " + getDiffColor(timeDiff) }, formatDiff(timeDiff, "min")),
+                            h('div', { key: "t3", className: "font-bold text-[10px] " + getDifferenceColor(timeDiff) }, formatDiff(timeDiff, "min")),
 
                             ...(fuelData?.cumulated ? [
                                 h('div', { key: "u0", className: UI_STYLES.label }, "Used"),
@@ -923,7 +969,7 @@
                                         h('button', { onClick: incrementFuelUsed, className: UI_STYLES.button }, "▲")
                                     )
                                 ),
-                                h('div', { key: "u3", className: "font-bold text-[10px] " + getDiffColor(fuelUsedDiff) }, formatDiff(fuelUsedDiff))
+                                h('div', { key: "u3", className: "font-bold text-[10px] " + getDifferenceColor(fuelUsedDiff) }, formatDiff(fuelUsedDiff))
                             ] : []),
 
                             ...(fuelData?.remaining ? [
@@ -942,7 +988,7 @@
                                         h('button', { onClick: incrementFuelRemaining, className: UI_STYLES.button }, "▲")
                                     )
                                 ),
-                                h('div', { key: "r3", className: "font-bold text-[10px] " + getDiffColor(-fuelRemainingDiff) }, formatDiff(fuelRemainingDiff))
+                                h('div', { key: "r3", className: "font-bold text-[10px] " + getDifferenceColor(-fuelRemainingDiff) }, formatDiff(fuelRemainingDiff))
                             ] : [])
                         ),
                         allFields.length > 0 && h('div', null,
@@ -974,78 +1020,28 @@
             const plannedTimeStr = formatTime(waypoint.passingByDate);
             const fuelData = formatFuel(waypoint.fuel);
 
-            // EFB Fuel Check: holds actual (in-flight) values entered by the pilot.
-            // Empty strings mean "not yet entered" — diffs are only computed when a value is present.
-            // This state is owned here in WaypointCard and passed down into WaypointDetailModal
-            // so both the card and the modal stay in sync.
             const [actualData, setActualData] = useState({
-                time: "",       // HH:MM actual passing time (UTC)
-                used: "",       // Actual cumulative fuel used (same unit as planned)
-                remaining: ""   // Actual fuel remaining on board (same unit as planned)
+                time: "",
+                used: "",
+                remaining: ""
             });
 
             // Controls the full-detail modal
             const [showDetail, setShowDetail] = useState(false);
 
-            // Track focus state for smart input behavior
-            const [inputFocusState, setInputFocusState] = useState({
-                usedFocused: false,
-                remainingFocused: false
-            });
-
-            // ── EFB Fuel Check: diff = Actual − Planned ─────────────────────────────────
-            // These three differences drive the inline annotations on the card (e.g. "+3 min",
-            // "-100 KG") and the diff row inside WaypointDetailModal.
-            //
-            // Convention:  positive diff = deviation in the "bad" direction (late / overfuel used)
-            //              negative diff = deviation in the "good" direction (early / fuel saved)
-            //
-            // Exception — fuel REMAINING: a positive diff (more fuel than planned) is good,
-            // so the color is inverted when rendered (see renderPlannedWithDiff / getDifferenceColor).
-            //
-            // Diffs are null when the pilot has not yet entered an actual value, which suppresses
-            // the annotation entirely so the card stays clean until data is available.
             const plannedTimeMinutes = timeToMinutes(plannedTimeStr);
             const actualTimeMinutes = timeToMinutes(actualData.time);
             const timeDifference = (plannedTimeMinutes !== null && actualTimeMinutes !== null)
-                ? actualTimeMinutes - plannedTimeMinutes  // positive = late, negative = early
+                ? actualTimeMinutes - plannedTimeMinutes
                 : null;
 
             const fuelUsedDifference = (fuelData?.numCumulated !== undefined && actualData.used !== "")
-                ? Number(actualData.used) - fuelData.numCumulated  // positive = more burned = adverse
+                ? Number(actualData.used) - fuelData.numCumulated
                 : null;
 
             const fuelRemainingDifference = (fuelData?.numRemaining !== undefined && actualData.remaining !== "")
-                ? Number(actualData.remaining) - fuelData.numRemaining  // positive = more remaining = beneficial
+                ? Number(actualData.remaining) - fuelData.numRemaining
                 : null;
-
-            // ==========================================
-            // TIME INPUT HELPERS
-            // ==========================================
-
-            /**
-             * Parses a time string into hours and minutes components.
-             * @param {string} timeString - Time in HH:MM format
-             * @returns {Object} Object with hours and minutes properties
-             */
-            const parseTimeComponents = (timeString) => {
-                if (!timeString) return { hours: 0, minutes: 0 };
-                const [hours, minutes] = timeString.split(':').map(Number);
-                return {
-                    hours: isNaN(hours) ? 0 : hours,
-                    minutes: isNaN(minutes) ? 0 : minutes
-                };
-            };
-
-            /**
-             * Formats hours and minutes back into HH:MM string format.
-             * @param {number} hours - Hours (0-23)
-             * @param {number} minutes - Minutes (0-59)
-             * @returns {string} Formatted time string
-             */
-            const formatTimeComponents = (hours, minutes) => {
-                return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-            };
 
             /**
              * Increments the actual time by one minute.
@@ -1053,19 +1049,9 @@
              */
             const incrementTime = () => {
                 const baseTime = actualData.time || plannedTimeStr.split('Z')[0];
-                const { hours, minutes } = parseTimeComponents(baseTime);
-
-                let newMinutes = minutes + 1;
-                let newHours = hours;
-
-                if (newMinutes >= 60) {
-                    newMinutes = 0;
-                    newHours = (newHours + 1) % 24;
-                }
-
                 setActualData(prev => ({
                     ...prev,
-                    time: formatTimeComponents(newHours, newMinutes)
+                    time: shiftTimeByMinute(baseTime, 1)
                 }));
             };
 
@@ -1075,48 +1061,21 @@
              */
             const decrementTime = () => {
                 const baseTime = actualData.time || plannedTimeStr.split('Z')[0];
-                const { hours, minutes } = parseTimeComponents(baseTime);
-
-                let newMinutes = minutes - 1;
-                let newHours = hours;
-
-                if (newMinutes < 0) {
-                    newMinutes = 59;
-                    newHours = (newHours - 1 + 24) % 24;
-                }
-
                 setActualData(prev => ({
                     ...prev,
-                    time: formatTimeComponents(newHours, newMinutes)
+                    time: shiftTimeByMinute(baseTime, -1)
                 }));
             };
-
-            // ==========================================
-            // FUEL INPUT HELPERS (EFB Fuel Check)
-            // ==========================================
-            // Pilots verify fuel at each waypoint by comparing planned vs actual values.
-            // These helpers handle the ▲/▼ stepper buttons and direct text-field edits.
-            //
-            // Smart first-tap behaviour: when a field is still empty, the first stepper press
-            // initialises it to the nearest FUEL_STEP boundary around the planned value
-            // (ceil for ▲, floor for ▼), so the pilot can adjust from a sensible baseline
-            // rather than from zero.  Subsequent presses simply add/subtract FUEL_STEP.
 
             /**
              * Increments fuel used by the standard step amount.
              * On first use with empty field, rounds planned value up to next step boundary.
              */
             const incrementFuelUsed = () => {
-                if (!actualData.used) {
-                    // Initialize with rounded-up planned value
-                    const plannedValue = fuelData.numCumulated;
-                    const nextStepBoundary = Math.ceil(plannedValue / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({ ...prev, used: String(nextStepBoundary) }));
-                } else {
-                    // Increment existing value
-                    const currentValue = Number(actualData.used);
-                    setActualData(prev => ({ ...prev, used: String(currentValue + FUEL_STEP) }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    used: getSteppedFuelValue(prev.used, fuelData?.numCumulated, 1)
+                }));
             };
 
             /**
@@ -1124,22 +1083,10 @@
              * On first use with empty field, rounds planned value down to previous step boundary.
              */
             const decrementFuelUsed = () => {
-                if (!actualData.used) {
-                    // Initialize with rounded-down planned value
-                    const plannedValue = fuelData.numCumulated;
-                    const prevStepBoundary = Math.floor(plannedValue / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({
-                        ...prev,
-                        used: String(Math.max(0, prevStepBoundary))
-                    }));
-                } else {
-                    // Decrement existing value
-                    const currentValue = Number(actualData.used);
-                    setActualData(prev => ({
-                        ...prev,
-                        used: String(Math.max(0, currentValue - FUEL_STEP))
-                    }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    used: getSteppedFuelValue(prev.used, fuelData?.numCumulated, -1)
+                }));
             };
 
             /**
@@ -1147,16 +1094,10 @@
              * On first use with empty field, rounds planned value up to next step boundary.
              */
             const incrementFuelRemaining = () => {
-                if (!actualData.remaining) {
-                    // Initialize with rounded-up planned value
-                    const plannedValue = fuelData.numRemaining;
-                    const nextStepBoundary = Math.ceil(plannedValue / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({ ...prev, remaining: String(nextStepBoundary) }));
-                } else {
-                    // Increment existing value
-                    const currentValue = Number(actualData.remaining);
-                    setActualData(prev => ({ ...prev, remaining: String(currentValue + FUEL_STEP) }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    remaining: getSteppedFuelValue(prev.remaining, fuelData?.numRemaining, 1)
+                }));
             };
 
             /**
@@ -1164,27 +1105,11 @@
              * On first use with empty field, rounds planned value down to previous step boundary.
              */
             const decrementFuelRemaining = () => {
-                if (!actualData.remaining) {
-                    // Initialize with rounded-down planned value
-                    const plannedValue = fuelData.numRemaining;
-                    const prevStepBoundary = Math.floor(plannedValue / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({
-                        ...prev,
-                        remaining: String(Math.max(0, prevStepBoundary))
-                    }));
-                } else {
-                    // Decrement existing value
-                    const currentValue = Number(actualData.remaining);
-                    setActualData(prev => ({
-                        ...prev,
-                        remaining: String(Math.max(0, currentValue - FUEL_STEP))
-                    }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    remaining: getSteppedFuelValue(prev.remaining, fuelData?.numRemaining, -1)
+                }));
             };
-
-            // ==========================================
-            // INPUT CHANGE HANDLERS
-            // ==========================================
 
             /**
              * Handles changes to the fuel used input field.
@@ -1214,54 +1139,6 @@
                 }
             };
 
-            // ==========================================
-            // STYLING HELPERS
-            // ==========================================
-
-            /**
-             * Determines color styling for difference values based on whether they're positive, negative, or zero.
-             * @param {number} difference - The difference value to style
-             * @returns {string} CSS class for coloring the difference
-             */
-            /**
-             * Maps a diff value to a Tailwind text colour for the EFB fuel check display.
-             *   positive → red   (adverse: late, burned more than planned)
-             *   negative → green (beneficial: early, saved fuel)
-             *   zero     → blue  (exactly on plan)
-             *
-             * For fuel REMAINING the sign semantics are reversed (more remaining is good),
-             * so callers must negate: getDifferenceColor(-fuelRemainingDifference).
-             */
-            const getDifferenceColor = (difference) => {
-                if (difference === 0) return "text-blue-500";
-                return difference > 0 ? "text-red-500" : "text-emerald-500";
-            };
-
-            /**
-             * Renders a planned value with an inline colour-coded diff annotation,
-             * e.g. "44212 KG (+100 KG)" in red, or "10:40Z (-2 min)" in green.
-             * Used on the OFP card so pilots can see deviations at a glance without
-             * opening the detail modal.
-             *
-             * @param {string} plannedValue - Formatted planned value to display
-             * @param {number|null} difference - Actual − Planned; null hides the annotation
-             * @param {string} unit - Optional unit suffix for the diff label
-             * @param {boolean} invertDiffColor - Pass true for fuel remaining, where a
-             *   positive diff is beneficial (more fuel on board than planned)
-             */
-            const renderPlannedWithDiff = (plannedValue, actualValue, difference, unit = "", invertDiffColor = false) => {
-                if (difference === null || difference === undefined || isNaN(difference)) {
-                    return actualValue || plannedValue;
-                }
-
-                const colorTarget = invertDiffColor ? -difference : difference;
-                return h('span', null,
-                    actualValue || plannedValue,
-                    h('span', {
-                        className: "font-bold text-[10px] " + getDifferenceColor(colorTarget)
-                    }, ` (${formatDiff(difference, unit)})`)
-                );
-            };
 
             const fuelUnit = String(waypoint?.fuel?.unit || '').toUpperCase();
             const actualTimeDisplay = actualData.time ? `${actualData.time}Z` : null;
@@ -1273,7 +1150,6 @@
                 : null;
 
             // Calculate grid layout based on selected columns
-            const baseColumnCount = 3; // Time + Used + Remaining
             const extraColumnCount = selectedColumns?.length || 0;
             const gridColumnTemplate = `grid-cols-[100px_100px_100px${'_100px'.repeat(extraColumnCount)}]`;
 
@@ -1330,13 +1206,13 @@
                         // Value Row (planned values with inline diff when actual exists)
                         h('div', { className: "contents" },
                             h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
-                                renderPlannedWithDiff(plannedTimeStr, actualTimeDisplay, timeDifference, "min")
+                                renderValueWithDiff(plannedTimeStr, actualTimeDisplay, timeDifference, "min")
                             ),
                             fuelData?.cumulated && h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
-                                renderPlannedWithDiff(fuelData.cumulated, actualUsedDisplay, fuelUsedDifference)
+                                renderValueWithDiff(fuelData.cumulated, actualUsedDisplay, fuelUsedDifference)
                             ),
                             fuelData?.remaining && h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
-                                renderPlannedWithDiff(fuelData.remaining, actualRemainingDisplay, fuelRemainingDifference, "", true)
+                                renderValueWithDiff(fuelData.remaining, actualRemainingDisplay, fuelRemainingDifference, "", true)
                             ),
                             selectedColumns.map(col => h('div', {
                                 key: col,
@@ -1376,11 +1252,6 @@
                 document.addEventListener('keydown', handleKeyDown);
                 return () => document.removeEventListener('keydown', handleKeyDown);
             }, []);
-
-            const getDiffColor = (diff) => {
-                if (diff === 0) return "text-blue-500";
-                return diff > 0 ? "text-red-500" : "text-emerald-500";
-            };
 
             return h('div', {
                 className: "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40",
@@ -1430,7 +1301,7 @@
                                     h('button', { onClick: incrementTime, className: UI_STYLES.button }, "▲")
                                 )
                             ),
-                            h('div', { key: "t3", className: "font-bold text-[10px] " + getDiffColor(timeDifference) }, formatDiff(timeDifference, "min")),
+                            h('div', { key: "t3", className: "font-bold text-[10px] " + getDifferenceColor(timeDifference) }, formatDiff(timeDifference, "min")),
 
                             h('div', { key: "r0", className: UI_STYLES.label }, "Remaining"),
                             h('div', { key: "r1", className: "text-sm font-bold text-gray-700" }, plannedRemainingDisplay),
@@ -1458,7 +1329,7 @@
                                     h('button', { onClick: incrementRemaining, className: UI_STYLES.button }, "▲")
                                 )
                             ),
-                            h('div', { key: "r3", className: "font-bold text-[10px] " + getDiffColor(-remainingDifference) }, formatDiff(remainingDifference, remainingUnit))
+                            h('div', { key: "r3", className: "font-bold text-[10px] " + getDifferenceColor(-remainingDifference) }, formatDiff(remainingDifference, remainingUnit))
                         )
                     )
                 )
@@ -1490,69 +1361,30 @@
                 remaining: ""
             });
 
-            const parseTimeComponents = (timeString) => {
-                if (!timeString) return { hours: 0, minutes: 0 };
-                const [hours, minutes] = timeString.split(':').map(Number);
-                return {
-                    hours: isNaN(hours) ? 0 : hours,
-                    minutes: isNaN(minutes) ? 0 : minutes
-                };
-            };
-
-            const formatTimeComponents = (hours, minutes) => `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-
             const incrementTime = () => {
                 const baseTime = actualData.time || plannedTime.split('Z')[0];
-                const { hours, minutes } = parseTimeComponents(baseTime);
-
-                let newMinutes = minutes + 1;
-                let newHours = hours;
-
-                if (newMinutes >= 60) {
-                    newMinutes = 0;
-                    newHours = (newHours + 1) % 24;
-                }
-
-                setActualData(prev => ({ ...prev, time: formatTimeComponents(newHours, newMinutes) }));
+                setActualData(prev => ({ ...prev, time: shiftTimeByMinute(baseTime, 1) }));
             };
 
             const decrementTime = () => {
                 const baseTime = actualData.time || plannedTime.split('Z')[0];
-                const { hours, minutes } = parseTimeComponents(baseTime);
-
-                let newMinutes = minutes - 1;
-                let newHours = hours;
-
-                if (newMinutes < 0) {
-                    newMinutes = 59;
-                    newHours = (newHours - 1 + 24) % 24;
-                }
-
-                setActualData(prev => ({ ...prev, time: formatTimeComponents(newHours, newMinutes) }));
+                setActualData(prev => ({ ...prev, time: shiftTimeByMinute(baseTime, -1) }));
             };
 
             const incrementRemaining = () => {
                 if (plannedRemainingNumber === undefined) return;
-
-                if (!actualData.remaining) {
-                    const nextStepBoundary = Math.ceil(plannedRemainingNumber / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({ ...prev, remaining: String(nextStepBoundary) }));
-                } else {
-                    const currentValue = Number(actualData.remaining);
-                    setActualData(prev => ({ ...prev, remaining: String(currentValue + FUEL_STEP) }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    remaining: getSteppedFuelValue(prev.remaining, plannedRemainingNumber, 1)
+                }));
             };
 
             const decrementRemaining = () => {
                 if (plannedRemainingNumber === undefined) return;
-
-                if (!actualData.remaining) {
-                    const prevStepBoundary = Math.floor(plannedRemainingNumber / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({ ...prev, remaining: String(Math.max(0, prevStepBoundary)) }));
-                } else {
-                    const currentValue = Number(actualData.remaining);
-                    setActualData(prev => ({ ...prev, remaining: String(Math.max(0, currentValue - FUEL_STEP)) }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    remaining: getSteppedFuelValue(prev.remaining, plannedRemainingNumber, -1)
+                }));
             };
 
             const timeDifference = (() => {
@@ -1565,23 +1397,6 @@
             const remainingDifference = (plannedRemainingNumber !== undefined && actualData.remaining !== "")
                 ? Number(actualData.remaining) - plannedRemainingNumber
                 : null;
-
-            const getDifferenceColor = (difference) => {
-                if (difference === 0) return "text-blue-500";
-                return difference > 0 ? "text-red-500" : "text-emerald-500";
-            };
-
-            const renderPlannedWithDiff = (plannedValue, actualValue, difference, unit = "", invertDiffColor = false) => {
-                if (difference === null || difference === undefined || isNaN(difference)) {
-                    return actualValue || plannedValue;
-                }
-
-                const colorTarget = invertDiffColor ? -difference : difference;
-                return h('span', null,
-                    actualValue || plannedValue,
-                    h('span', { className: "font-bold text-[10px] " + getDifferenceColor(colorTarget) }, ` (${formatDiff(difference, unit)})`)
-                );
-            };
 
             const actualTimeDisplay = actualData.time ? `${actualData.time}Z` : null;
             const actualRemainingDisplay = actualData.remaining !== ""
@@ -1610,10 +1425,10 @@
                             ),
                             h('div', { className: "contents" },
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedTime, actualTimeDisplay, timeDifference, "min")
+                                    renderValueWithDiff(plannedTime, actualTimeDisplay, timeDifference, "min")
                                 ),
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedRemainingDisplay, actualRemainingDisplay, remainingDifference, remainingUnit, true)
+                                    renderValueWithDiff(plannedRemainingDisplay, actualRemainingDisplay, remainingDifference, remainingUnit, true)
                                 )
                             )
                         )
@@ -1673,11 +1488,6 @@
                 return () => document.removeEventListener('keydown', handleKeyDown);
             }, []);
 
-            const getDiffColor = (diff) => {
-                if (diff === 0) return "text-blue-500";
-                return diff > 0 ? "text-red-500" : "text-emerald-500";
-            };
-
             return h('div', {
                 className: "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40",
                 onClick: (e) => {
@@ -1726,7 +1536,7 @@
                                     h('button', { onClick: incrementTime, className: UI_STYLES.button }, "▲")
                                 )
                             ),
-                            h('div', { key: "t3", className: "font-bold text-[10px] " + getDiffColor(timeDifference) }, formatDiff(timeDifference, "min")),
+                            h('div', { key: "t3", className: "font-bold text-[10px] " + getDifferenceColor(timeDifference) }, formatDiff(timeDifference, "min")),
 
                             h('div', { key: "u0", className: UI_STYLES.label }, "Used"),
                             h('div', { key: "u1", className: "text-sm font-bold text-gray-700" }, plannedUsedDisplay),
@@ -1754,7 +1564,7 @@
                                     h('button', { onClick: incrementUsed, className: UI_STYLES.button }, "▲")
                                 )
                             ),
-                            h('div', { key: "u3", className: "font-bold text-[10px] " + getDiffColor(usedDifference) }, formatDiff(usedDifference, usedUnit)),
+                            h('div', { key: "u3", className: "font-bold text-[10px] " + getDifferenceColor(usedDifference) }, formatDiff(usedDifference, usedUnit)),
 
                             h('div', { key: "r0", className: UI_STYLES.label }, "Remaining"),
                             h('div', { key: "r1", className: "text-sm font-bold text-gray-700" }, plannedRemainingDisplay),
@@ -1782,7 +1592,7 @@
                                     h('button', { onClick: incrementRemaining, className: UI_STYLES.button }, "▲")
                                 )
                             ),
-                            h('div', { key: "r3", className: "font-bold text-[10px] " + getDiffColor(-remainingDifference) }, formatDiff(remainingDifference, remainingUnit))
+                            h('div', { key: "r3", className: "font-bold text-[10px] " + getDifferenceColor(-remainingDifference) }, formatDiff(remainingDifference, remainingUnit))
                         )
                     )
                 )
@@ -1825,93 +1635,50 @@
                 remaining: ""
             });
 
-            const parseTimeComponents = (timeString) => {
-                if (!timeString) return { hours: 0, minutes: 0 };
-                const [hours, minutes] = timeString.split(':').map(Number);
-                return {
-                    hours: isNaN(hours) ? 0 : hours,
-                    minutes: isNaN(minutes) ? 0 : minutes
-                };
-            };
-
-            const formatTimeComponents = (hours, minutes) => `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-
             const incrementTime = () => {
                 const baseTime = actualData.time || plannedTime.split('Z')[0];
-                const { hours, minutes } = parseTimeComponents(baseTime);
-
-                let newMinutes = minutes + 1;
-                let newHours = hours;
-
-                if (newMinutes >= 60) {
-                    newMinutes = 0;
-                    newHours = (newHours + 1) % 24;
-                }
-
-                setActualData(prev => ({ ...prev, time: formatTimeComponents(newHours, newMinutes) }));
+                setActualData(prev => ({ ...prev, time: shiftTimeByMinute(baseTime, 1) }));
             };
 
             const decrementTime = () => {
                 const baseTime = actualData.time || plannedTime.split('Z')[0];
-                const { hours, minutes } = parseTimeComponents(baseTime);
-
-                let newMinutes = minutes - 1;
-                let newHours = hours;
-
-                if (newMinutes < 0) {
-                    newMinutes = 59;
-                    newHours = (newHours - 1 + 24) % 24;
-                }
-
-                setActualData(prev => ({ ...prev, time: formatTimeComponents(newHours, newMinutes) }));
+                setActualData(prev => ({ ...prev, time: shiftTimeByMinute(baseTime, -1) }));
             };
 
             const incrementRemaining = () => {
                 if (plannedRemainingNumber === undefined) return;
 
-                if (!actualData.remaining) {
-                    const nextStepBoundary = Math.ceil(plannedRemainingNumber / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({ ...prev, remaining: String(nextStepBoundary) }));
-                } else {
-                    const currentValue = Number(actualData.remaining);
-                    setActualData(prev => ({ ...prev, remaining: String(currentValue + FUEL_STEP) }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    remaining: getSteppedFuelValue(prev.remaining, plannedRemainingNumber, 1)
+                }));
             };
 
             const incrementUsed = () => {
                 if (plannedUsedNumber === undefined) return;
 
-                if (!actualData.used) {
-                    const nextStepBoundary = Math.ceil(plannedUsedNumber / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({ ...prev, used: String(nextStepBoundary) }));
-                } else {
-                    const currentValue = Number(actualData.used);
-                    setActualData(prev => ({ ...prev, used: String(currentValue + FUEL_STEP) }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    used: getSteppedFuelValue(prev.used, plannedUsedNumber, 1)
+                }));
             };
 
             const decrementUsed = () => {
                 if (plannedUsedNumber === undefined) return;
 
-                if (!actualData.used) {
-                    const prevStepBoundary = Math.floor(plannedUsedNumber / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({ ...prev, used: String(Math.max(0, prevStepBoundary)) }));
-                } else {
-                    const currentValue = Number(actualData.used);
-                    setActualData(prev => ({ ...prev, used: String(Math.max(0, currentValue - FUEL_STEP)) }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    used: getSteppedFuelValue(prev.used, plannedUsedNumber, -1)
+                }));
             };
 
             const decrementRemaining = () => {
                 if (plannedRemainingNumber === undefined) return;
 
-                if (!actualData.remaining) {
-                    const prevStepBoundary = Math.floor(plannedRemainingNumber / FUEL_STEP) * FUEL_STEP;
-                    setActualData(prev => ({ ...prev, remaining: String(Math.max(0, prevStepBoundary)) }));
-                } else {
-                    const currentValue = Number(actualData.remaining);
-                    setActualData(prev => ({ ...prev, remaining: String(Math.max(0, currentValue - FUEL_STEP)) }));
-                }
+                setActualData(prev => ({
+                    ...prev,
+                    remaining: getSteppedFuelValue(prev.remaining, plannedRemainingNumber, -1)
+                }));
             };
 
             const timeDifference = (() => {
@@ -1928,23 +1695,6 @@
             const remainingDifference = (plannedRemainingNumber !== undefined && actualData.remaining !== "")
                 ? Number(actualData.remaining) - plannedRemainingNumber
                 : null;
-
-            const getDifferenceColor = (difference) => {
-                if (difference === 0) return "text-blue-500";
-                return difference > 0 ? "text-red-500" : "text-emerald-500";
-            };
-
-            const renderPlannedWithDiff = (plannedValue, actualValue, difference, unit = "", invertDiffColor = false) => {
-                if (difference === null || difference === undefined || isNaN(difference)) {
-                    return actualValue || plannedValue;
-                }
-
-                const colorTarget = invertDiffColor ? -difference : difference;
-                return h('span', null,
-                    actualValue || plannedValue,
-                    h('span', { className: "font-bold text-[10px] " + getDifferenceColor(colorTarget) }, ` (${formatDiff(difference, unit)})`)
-                );
-            };
 
             const actualTimeDisplay = actualData.time ? `${actualData.time}Z` : null;
             const actualUsedDisplay = actualData.used !== ""
@@ -1977,13 +1727,13 @@
                             ),
                             h('div', { className: "contents" },
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedTime, actualTimeDisplay, timeDifference, "min")
+                                    renderValueWithDiff(plannedTime, actualTimeDisplay, timeDifference, "min")
                                 ),
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedUsedDisplay, actualUsedDisplay, usedDifference, usedUnit)
+                                    renderValueWithDiff(plannedUsedDisplay, actualUsedDisplay, usedDifference, usedUnit)
                                 ),
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
-                                    renderPlannedWithDiff(plannedRemainingDisplay, actualRemainingDisplay, remainingDifference, remainingUnit, true)
+                                    renderValueWithDiff(plannedRemainingDisplay, actualRemainingDisplay, remainingDifference, remainingUnit, true)
                                 )
                             )
                         )
@@ -3025,7 +2775,6 @@
 
                 // Route header is shown only on Overview page
                 selectedPage === 'summary' && h(RouteHeader, {
-                    route: routeData,
                     atcCallsign: flightSummaryData?.atcCallsign || null,
                     flightNumber: flightSummaryData?.flightNumber || null,
                     originIcao: flightSummaryData?.originAirport?.icaoCode || null,
