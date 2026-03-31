@@ -1254,6 +1254,123 @@
         };
 
         /**
+         * OFF BLOCK detail modal with only Time and Remaining editable controls.
+         */
+        const OffBlockDetailModal = ({
+            title,
+            plannedTime,
+            plannedRemainingNumber,
+            plannedRemainingDisplay,
+            remainingUnit,
+            actualData,
+            setActualData,
+            onClose,
+            incrementTime,
+            decrementTime,
+            incrementRemaining,
+            decrementRemaining,
+            timeDifference,
+            remainingDifference
+        }) => {
+            const handleBackdropClick = (e) => {
+                if (e.target === e.currentTarget) onClose();
+            };
+
+            useEffect(() => {
+                const handleKeyDown = (e) => { if (e.key === 'Escape') onClose(); };
+                document.addEventListener('keydown', handleKeyDown);
+                return () => document.removeEventListener('keydown', handleKeyDown);
+            }, []);
+
+            const getDiffColor = (diff) => {
+                if (diff === 0) return "text-blue-500";
+                return diff > 0 ? "text-red-500" : "text-emerald-500";
+            };
+
+            return h('div', {
+                className: "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40",
+                onClick: (e) => {
+                    e.stopPropagation();
+                    handleBackdropClick(e);
+                }
+            },
+                h('div', { className: "bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl w-full sm:max-w-xl max-h-[90vh] overflow-y-auto animate-in" },
+                    h('div', { className: "p-5 sm:p-6 pb-4 border-b border-gray-100 flex items-start justify-between gap-4 sticky top-0 bg-white rounded-t-3xl z-10" },
+                        h('div', null,
+                            h('p', { className: UI_STYLES.header }, "OFF BLOCK"),
+                            h('h2', { className: "text-xl sm:text-2xl font-black text-gray-800" }, title)
+                        ),
+                        h('button', {
+                            onClick: onClose,
+                            className: "flex-shrink-0 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors flex items-center justify-center font-bold text-gray-500 hover:text-gray-700",
+                            'aria-label': 'Close'
+                        }, "✕")
+                    ),
+                    h('div', { className: "p-5 sm:p-6" },
+                        h('div', { className: "grid grid-cols-[72px_1fr_minmax(120px,1.5fr)_52px] gap-x-3 gap-y-2 items-center" },
+                            h('div', { key: "h0" }),
+                            h('div', { key: "h1", className: UI_STYLES.header }, "Planned"),
+                            h('div', { key: "h2", className: UI_STYLES.header }, "Actual"),
+                            h('div', { key: "h3", className: UI_STYLES.header }, "Diff"),
+
+                            h('div', { key: "t0", className: UI_STYLES.label }, "Time"),
+                            h('div', { key: "t1", className: "text-sm font-bold text-gray-700" }, plannedTime),
+                            h('div', { key: "t2", className: "flex gap-0.5 items-center" },
+                                h('input', {
+                                    type: 'text',
+                                    className: UI_STYLES.input,
+                                    placeholder: "HH:MM",
+                                    value: actualData.time,
+                                    onChange: (e) => {
+                                        const newValue = e.target.value;
+                                        if (actualData.time === "" && newValue !== "") {
+                                            setActualData(prev => ({ ...prev, time: plannedTime.split('Z')[0] }));
+                                        } else {
+                                            setActualData(prev => ({ ...prev, time: newValue }));
+                                        }
+                                    }
+                                }),
+                                h('div', { className: "flex flex-row gap-0.5" },
+                                    h('button', { onClick: decrementTime, className: UI_STYLES.button }, "▼"),
+                                    h('button', { onClick: incrementTime, className: UI_STYLES.button }, "▲")
+                                )
+                            ),
+                            h('div', { key: "t3", className: "font-bold text-[10px] " + getDiffColor(timeDifference) }, formatDiff(timeDifference, "min")),
+
+                            h('div', { key: "r0", className: UI_STYLES.label }, "Remaining"),
+                            h('div', { key: "r1", className: "text-sm font-bold text-gray-700" }, plannedRemainingDisplay),
+                            h('div', { key: "r2", className: "flex gap-0.5 items-center" },
+                                h('input', {
+                                    type: 'number',
+                                    className: UI_STYLES.input,
+                                    placeholder: "Rem",
+                                    value: actualData.remaining,
+                                    onChange: (e) => {
+                                        const newValue = e.target.value;
+                                        if (actualData.remaining === "" && newValue !== "") {
+                                            if (plannedRemainingNumber !== undefined) {
+                                                setActualData(prev => ({ ...prev, remaining: String(plannedRemainingNumber) }));
+                                            } else {
+                                                setActualData(prev => ({ ...prev, remaining: newValue }));
+                                            }
+                                        } else {
+                                            setActualData(prev => ({ ...prev, remaining: newValue }));
+                                        }
+                                    }
+                                }),
+                                h('div', { className: "flex flex-row gap-0.5" },
+                                    h('button', { onClick: decrementRemaining, className: UI_STYLES.button }, "▼"),
+                                    h('button', { onClick: incrementRemaining, className: UI_STYLES.button }, "▲")
+                                )
+                            ),
+                            h('div', { key: "r3", className: "font-bold text-[10px] " + getDiffColor(-remainingDifference) }, formatDiff(remainingDifference, remainingUnit))
+                        )
+                    )
+                )
+            );
+        };
+
+        /**
          * OFF BLOCK section shown above the OFP waypoint list.
          * Uses the waypoint card layout for the inner flight-origin card.
          *
@@ -1261,41 +1378,163 @@
          * @param {Object|null} props.summary - Parsed flight.backup object
          */
         const OffBlockSection = ({ summary }) => {
-            const offBlockTime = formatUtcTimeOnly(summary?.scheduledTimes?.offBlock);
+            const plannedTime = formatUtcTimeOnly(summary?.scheduledTimes?.offBlock);
             const blockFuelEntry = Array.isArray(summary?.plannedFuels)
                 ? summary.plannedFuels.find((fuelEntry) => fuelEntry?.uid === 'blockFuel')
                 : null;
-            const blockFuelAmount = blockFuelEntry?.fuel?.amount;
-            const blockFuelUnit = blockFuelEntry?.fuel?.unit;
-            const blockFuelDisplay = blockFuelAmount !== undefined
-                ? `${formatNumber(blockFuelAmount)} ${String(blockFuelUnit || '').toUpperCase()}`.trim()
+            const plannedRemainingNumber = blockFuelEntry?.fuel?.amount;
+            const remainingUnit = String(blockFuelEntry?.fuel?.unit || '').toUpperCase();
+            const plannedRemainingDisplay = plannedRemainingNumber !== undefined
+                ? `${formatNumber(plannedRemainingNumber)} ${remainingUnit}`.trim()
                 : '-';
             const originTitle = summary?.originAirport?.icaoCode || '-';
+
+            const [showDetail, setShowDetail] = useState(false);
+            const [actualData, setActualData] = useState({
+                time: "",
+                remaining: ""
+            });
+
+            const parseTimeComponents = (timeString) => {
+                if (!timeString) return { hours: 0, minutes: 0 };
+                const [hours, minutes] = timeString.split(':').map(Number);
+                return {
+                    hours: isNaN(hours) ? 0 : hours,
+                    minutes: isNaN(minutes) ? 0 : minutes
+                };
+            };
+
+            const formatTimeComponents = (hours, minutes) => `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
+            const incrementTime = () => {
+                const baseTime = actualData.time || plannedTime.split('Z')[0];
+                const { hours, minutes } = parseTimeComponents(baseTime);
+
+                let newMinutes = minutes + 1;
+                let newHours = hours;
+
+                if (newMinutes >= 60) {
+                    newMinutes = 0;
+                    newHours = (newHours + 1) % 24;
+                }
+
+                setActualData(prev => ({ ...prev, time: formatTimeComponents(newHours, newMinutes) }));
+            };
+
+            const decrementTime = () => {
+                const baseTime = actualData.time || plannedTime.split('Z')[0];
+                const { hours, minutes } = parseTimeComponents(baseTime);
+
+                let newMinutes = minutes - 1;
+                let newHours = hours;
+
+                if (newMinutes < 0) {
+                    newMinutes = 59;
+                    newHours = (newHours - 1 + 24) % 24;
+                }
+
+                setActualData(prev => ({ ...prev, time: formatTimeComponents(newHours, newMinutes) }));
+            };
+
+            const incrementRemaining = () => {
+                if (plannedRemainingNumber === undefined) return;
+
+                if (!actualData.remaining) {
+                    const nextStepBoundary = Math.ceil(plannedRemainingNumber / FUEL_STEP) * FUEL_STEP;
+                    setActualData(prev => ({ ...prev, remaining: String(nextStepBoundary) }));
+                } else {
+                    const currentValue = Number(actualData.remaining);
+                    setActualData(prev => ({ ...prev, remaining: String(currentValue + FUEL_STEP) }));
+                }
+            };
+
+            const decrementRemaining = () => {
+                if (plannedRemainingNumber === undefined) return;
+
+                if (!actualData.remaining) {
+                    const prevStepBoundary = Math.floor(plannedRemainingNumber / FUEL_STEP) * FUEL_STEP;
+                    setActualData(prev => ({ ...prev, remaining: String(Math.max(0, prevStepBoundary)) }));
+                } else {
+                    const currentValue = Number(actualData.remaining);
+                    setActualData(prev => ({ ...prev, remaining: String(Math.max(0, currentValue - FUEL_STEP)) }));
+                }
+            };
+
+            const timeDifference = (() => {
+                const plannedMinutes = timeToMinutes(plannedTime);
+                const actualMinutes = timeToMinutes(actualData.time);
+                if (plannedMinutes === null || actualMinutes === null) return null;
+                return actualMinutes - plannedMinutes;
+            })();
+
+            const remainingDifference = (plannedRemainingNumber !== undefined && actualData.remaining !== "")
+                ? Number(actualData.remaining) - plannedRemainingNumber
+                : null;
+
+            const getDifferenceColor = (difference) => {
+                if (difference === 0) return "text-blue-500";
+                return difference > 0 ? "text-red-500" : "text-emerald-500";
+            };
+
+            const renderPlannedWithDiff = (plannedValue, difference, unit = "", invertDiffColor = false) => {
+                if (difference === null || difference === undefined || isNaN(difference)) {
+                    return plannedValue;
+                }
+
+                const colorTarget = invertDiffColor ? -difference : difference;
+                return h('span', null,
+                    plannedValue,
+                    h('span', { className: "font-bold text-[10px] " + getDifferenceColor(colorTarget) }, ` (${formatDiff(difference, unit)})`)
+                );
+            };
 
             return h('div', { className: "rounded-[2rem] border border-sky-100 bg-gradient-to-br from-sky-50 via-cyan-50 to-white p-3 sm:p-5 shadow-sm space-y-3" },
                 h('div', { className: "px-1 flex items-center justify-between gap-3" },
                     h('div', null,
-                        h('p', { className: "text-[10px] uppercase font-bold tracking-[0.22em] text-sky-600 mb-1" }, 'OFF BLOCK'),
-                    ),
+                        h('p', { className: "text-[10px] uppercase font-bold tracking-[0.22em] text-sky-600 mb-1" }, 'OFF BLOCK')
+                    )
                 ),
-                h('div', { className: "bg-white/90 ring-1 ring-sky-200 p-3 sm:p-6 rounded-3xl shadow-[0_10px_30px_rgba(14,116,144,0.10)] flex items-start gap-3 sm:gap-6" },
+                h('div', {
+                    className: "bg-white/90 ring-1 ring-sky-200 p-3 sm:p-6 rounded-3xl shadow-[0_10px_30px_rgba(14,116,144,0.10)] flex items-start gap-3 sm:gap-6 cursor-pointer",
+                    onClick: () => setShowDetail(true)
+                },
                     h('div', { className: "flex-1 overflow-x-auto -mx-3 sm:mx-0 px-3 sm:px-0" },
                         h('div', { className: "flex items-center justify-between gap-3 mb-3" },
                             h('div', { className: "font-black text-base sm:text-xl text-gray-800 truncate" }, originTitle),
-                            h('div', { className: "text-[10px] uppercase font-bold tracking-widest text-sky-500 whitespace-nowrap" })
+                            h('div', { className: "text-[10px] uppercase font-bold tracking-widest text-sky-500 whitespace-nowrap" }, 'Tap to edit')
                         ),
-                        h('div', { className: "grid grid-cols-[100px_100px] gap-x-6 gap-y-0 min-w-max" },
+                        h('div', { className: "grid grid-cols-[130px_160px] gap-x-6 gap-y-0 min-w-max" },
                             h('div', { className: "contents" },
                                 h('div', { className: "text-[10px] uppercase font-bold text-sky-500 tracking-wider mb-1" }, 'Time'),
-                                h('div', { className: "text-[10px] uppercase font-bold text-sky-500 tracking-wider mb-1" }, 'Fuel')
+                                h('div', { className: "text-[10px] uppercase font-bold text-sky-500 tracking-wider mb-1" }, 'Remaining')
                             ),
                             h('div', { className: "contents" },
-                                h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" }, offBlockTime),
-                                h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" }, blockFuelDisplay)
+                                h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
+                                    renderPlannedWithDiff(plannedTime, timeDifference, "min")
+                                ),
+                                h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
+                                    renderPlannedWithDiff(plannedRemainingDisplay, remainingDifference, remainingUnit, true)
+                                )
                             )
                         )
                     )
-                )
+                ),
+                showDetail && h(OffBlockDetailModal, {
+                    title: originTitle,
+                    plannedTime,
+                    plannedRemainingNumber,
+                    plannedRemainingDisplay,
+                    remainingUnit,
+                    actualData,
+                    setActualData,
+                    onClose: () => setShowDetail(false),
+                    incrementTime,
+                    decrementTime,
+                    incrementRemaining,
+                    decrementRemaining,
+                    timeDifference,
+                    remainingDifference
+                })
             );
         };
 

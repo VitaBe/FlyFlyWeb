@@ -14,6 +14,7 @@ The application is built as a **Single File Application (SFA)**, meaning all log
 * **Data Chronology:** Implements a sorting algorithm that organizes waypoints by their sequenceId to ensure the flight path is displayed in the correct order, regardless of the JSON's internal sorting.  
 * **Aviation Metrics Visualization:** Extracts and formats specific aviation data displayed in WaypointCard rows:  
   * **OFF BLOCK Start Card:** The OFP tab begins with a visually highlighted OFF BLOCK card before the waypoint list. It uses `flight.backup` data to show the origin airport ICAO as the title, the scheduled off-block time from `scheduledTimes.offBlock`, and the block fuel from `plannedFuels` where `uid = "blockFuel"`.
+  * **OFF BLOCK Modal (Reduced):** Tapping the OFF BLOCK card opens a dedicated modal similar to the waypoint modal, but intentionally reduced to only two editable fields: **Time** and **Remaining**.
   * **Base Columns (Always Display):** Waypoint title, planned time (HH:MM), fuel used, and fuel remaining.  
   * **Waypoint Detail Popup:** Clicking a waypoint title opens a modal with full waypoint details and all non-empty STATIC_COLUMNS values.
   * **Shared Actual Inputs:** The modal contains the ACTUAL controls (time, fuel used, fuel remaining with ▲/▼ steppers). Values are synchronized with the waypoint card in real time.
@@ -155,16 +156,17 @@ A core EFB (Electronic Flight Bag) function is the **fuel check**: at each waypo
 1. **Upload Flight Data:** Click "Choose File" on the welcome screen and select a `.zip`/`.effarchive` export containing `routes.backup` and `flight.backup`.
 2. **View Flight Plan:** The application displays a highlighted OFF BLOCK start card first, followed by waypoints in chronological order with base columns (Time, Used Fuel, Remaining Fuel).
 3. **Review OFF BLOCK Snapshot:** The special OFP start card shows the departure airport ICAO, scheduled off-block time, and planned block fuel from `flight.backup`.
-4. **Configure Columns:** Click the **Settings (gear) icon** in the top-right to open the Column Settings panel.
-5. **Toggle Fields:** Check/uncheck any of the 19 available fields to add or remove columns from the waypoint grid (all default to hidden).
-6. **Open Waypoint Popup:** Click a waypoint title to open the detail popup.
-7. **Enter Actual Data:** In the popup, edit actual flight times and fuel values with the blue inputs and steppers.
-8. **Review Compact Diff in OFP Card:** The card shows planned values with inline diff in parentheses:
+4. **Edit OFF BLOCK Values:** Tap the OFF BLOCK card to open a compact modal where only **Time** and **Remaining** can be edited.
+5. **Configure Columns:** Click the **Settings (gear) icon** in the top-right to open the Column Settings panel.
+6. **Toggle Fields:** Check/uncheck any of the 19 available fields to add or remove columns from the waypoint grid (all default to hidden).
+7. **Open Waypoint Popup:** Click a waypoint title to open the detail popup.
+8. **Enter Actual Data:** In the popup, edit actual flight times and fuel values with the blue inputs and steppers.
+9. **Review Compact Diff in OFP Card:** The card shows planned values with inline diff in parentheses:
   - **Green** = Beneficial deviation
   - **Red** = Adverse deviation
   - **Blue** = No deviation (zero diff)
-9. **Close Popup / Continue:** Close the popup to keep reviewing the OFP cards with synchronized values.
-10. **Close Flight:** Click the "Close" button to reset and upload a new file.
+10. **Close Popup / Continue:** Close the popup to keep reviewing the OFP cards with synchronized values.
+11. **Close Flight:** Click the "Close" button to reset and upload a new file.
 
 ## **How to Run**
 
