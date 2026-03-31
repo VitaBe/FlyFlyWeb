@@ -986,6 +986,7 @@
 
             const summaryInfo = summary.summaryAdditionalInfo || {};
             const etopsMinutes = parseDurationToMinutes(summaryInfo.diversion);
+            const atcText = typeof summary.ATC === 'string' ? summary.ATC.trim() : '';
             const optiClimbHtml = sanitizeRichText(
                 summary.optiClimb || summary.recommendations?.opti?.find((entry) =>
                     /opticlimb/i.test(entry?.title || '') || /opticlimb/i.test(entry?.text || '')
@@ -1056,6 +1057,13 @@
                         className: "text-sm sm:text-base text-gray-700 leading-relaxed [&_b]:font-extrabold [&_strong]:font-extrabold [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2 [&_li]:my-1 [&_p]:my-2",
                         dangerouslySetInnerHTML: { __html: optiClimbHtml }
                     })
+                ),
+
+                atcText && h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                    h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6 uppercase" }, "ATC Flight Plan"),
+                    h('pre', {
+                        className: "whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed text-gray-700 bg-gray-50 rounded-2xl p-4 overflow-x-auto font-mono"
+                    }, atcText)
                 )
             );
         };
