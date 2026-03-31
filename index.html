@@ -1122,9 +1122,9 @@
             };
 
             // Calculate grid layout based on selected columns
-            const baseColumnCount = 4; // Label + Time + Used + Remaining
+            const baseColumnCount = 3; // Time + Used + Remaining
             const extraColumnCount = selectedColumns?.length || 0;
-            const gridColumnTemplate = `grid-cols-[56px_100px_100px_100px${'_100px'.repeat(extraColumnCount)}]`;
+            const gridColumnTemplate = `grid-cols-[100px_100px_100px${'_100px'.repeat(extraColumnCount)}]`;
 
             // ==========================================
             // RENDER COMPONENT
@@ -1165,7 +1165,6 @@
 
                         // Header Row
                         h('div', { className: "contents" },
-                            h('div', null), // Empty for label column
                             h('div', { className: UI_STYLES.header }, "Time"),
                             fuelData?.cumulated && h('div', { className: UI_STYLES.header }, "Used"),
                             fuelData?.remaining && h('div', { className: UI_STYLES.header }, "Remaining"),
@@ -1177,7 +1176,6 @@
 
                         // Value Row (planned values with inline diff when actual exists)
                         h('div', { className: "contents" },
-                            h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.label }, "Value"),
                             h('div', { className: UI_STYLES.rowHeight + " " + UI_STYLES.value },
                                 renderPlannedWithDiff(plannedTimeStr, timeDifference, "min")
                             ),
