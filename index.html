@@ -630,7 +630,7 @@
                 h('div', { className: "bg-white p-6 sm:p-12 rounded-3xl sm:rounded-[3rem] shadow-xl animate-in w-full max-w-sm sm:max-w-md" },
                     h(Icon, { name: "upload", className: "w-12 h-12 sm:w-16 sm:h-16 text-blue-600 mx-auto mb-4 sm:mb-6" }),
                     h('h1', { className: "text-2xl sm:text-3xl font-black mb-3 sm:mb-4" }, "FlightLog Pro"),
-                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload a .effarchive export containing routes.backup and flight.backup"),
+                    h('p', { className: "text-gray-500 mb-6 sm:mb-8" }, "Upload a .effarchive"),
                     h('label', {
                         className: "bg-blue-600 text-white px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-bold cursor-pointer hover:bg-blue-700 transition-all block"
                     },
@@ -1539,11 +1539,14 @@
         };
 
         /**
-         * ON BLOCK detail modal with only Time and Remaining editable controls.
+         * ON BLOCK detail modal with Time, Used, and Remaining editable controls.
          */
         const OnBlockEndDetailModal = ({
             title,
             plannedTime,
+            plannedUsedNumber,
+            plannedUsedDisplay,
+            usedUnit,
             plannedRemainingNumber,
             plannedRemainingDisplay,
             remainingUnit,
@@ -1552,9 +1555,12 @@
             onClose,
             incrementTime,
             decrementTime,
+            incrementUsed,
+            decrementUsed,
             incrementRemaining,
             decrementRemaining,
             timeDifference,
+            usedDifference,
             remainingDifference
         }) => {
             const handleBackdropClick = (e) => {
@@ -1622,6 +1628,34 @@
                             ),
                             h('div', { key: "t3", className: "font-bold text-[10px] " + getDiffColor(timeDifference) }, formatDiff(timeDifference, "min")),
 
+                            h('div', { key: "u0", className: UI_STYLES.label }, "Used"),
+                            h('div', { key: "u1", className: "text-sm font-bold text-gray-700" }, plannedUsedDisplay),
+                            h('div', { key: "u2", className: "flex gap-0.5 items-center" },
+                                h('input', {
+                                    type: 'number',
+                                    className: UI_STYLES.input,
+                                    placeholder: "Used",
+                                    value: actualData.used,
+                                    onChange: (e) => {
+                                        const newValue = e.target.value;
+                                        if (actualData.used === "" && newValue !== "") {
+                                            if (plannedUsedNumber !== undefined) {
+                                                setActualData(prev => ({ ...prev, used: String(plannedUsedNumber) }));
+                                            } else {
+                                                setActualData(prev => ({ ...prev, used: newValue }));
+                                            }
+                                        } else {
+                                            setActualData(prev => ({ ...prev, used: newValue }));
+                                        }
+                                    }
+                                }),
+                                h('div', { className: "flex flex-row gap-0.5" },
+                                    h('button', { onClick: decrementUsed, className: UI_STYLES.button }, "▼"),
+                                    h('button', { onClick: incrementUsed, className: UI_STYLES.button }, "▲")
+                                )
+                            ),
+                            h('div', { key: "u3", className: "font-bold text-[10px] " + getDiffColor(usedDifference) }, formatDiff(usedDifference, usedUnit)),
+
                             h('div', { key: "r0", className: UI_STYLES.label }, "Remaining"),
                             h('div', { key: "r1", className: "text-sm font-bold text-gray-700" }, plannedRemainingDisplay),
                             h('div', { key: "r2", className: "flex gap-0.5 items-center" },
@@ -1661,13 +1695,22 @@
          *
          * @param {Object} props - Component properties
          * @param {Object|null} props.summary - Parsed flight.backup object
+         * @param {Object|null} props.route - Parsed routes.backup main route object
          */
-        const OnBlockEndSection = ({ summary }) => {
+        const OnBlockEndSection = ({ summary, route }) => {
             const plannedTime = formatUtcTimeOnly(summary?.scheduledTimes?.onBlock);
             const onBlockFuelEntry = Array.isArray(summary?.plannedFuels)
                 ? summary.plannedFuels.find((fuelEntry) => fuelEntry?.uid === 'onBlockFuel')
                     || summary.plannedFuels.find((fuelEntry) => fuelEntry?.uid === 'touchDownFuel')
                 : null;
+            const lastWaypoint = Array.isArray(route?.waypoints) && route.waypoints.length > 0
+                ? route.waypoints[route.waypoints.length - 1]
+                : null;
+            const plannedUsedNumber = lastWaypoint?.fuel?.cumulated;
+            const usedUnit = String(lastWaypoint?.fuel?.unit || '').toUpperCase();
+            const plannedUsedDisplay = plannedUsedNumber !== undefined
+                ? `${formatNumber(plannedUsedNumber)} ${usedUnit}`.trim()
+                : '-';
             const plannedRemainingNumber = onBlockFuelEntry?.fuel?.amount;
             const remainingUnit = String(onBlockFuelEntry?.fuel?.unit || '').toUpperCase();
             const plannedRemainingDisplay = plannedRemainingNumber !== undefined
@@ -1678,6 +1721,7 @@
             const [showDetail, setShowDetail] = useState(false);
             const [actualData, setActualData] = useState({
                 time: "",
+                used: "",
                 remaining: ""
             });
 
@@ -1734,6 +1778,30 @@
                 }
             };
 
+            const incrementUsed = () => {
+                if (plannedUsedNumber === undefined) return;
+
+                if (!actualData.used) {
+                    const nextStepBoundary = Math.ceil(plannedUsedNumber / FUEL_STEP) * FUEL_STEP;
+                    setActualData(prev => ({ ...prev, used: String(nextStepBoundary) }));
+                } else {
+                    const currentValue = Number(actualData.used);
+                    setActualData(prev => ({ ...prev, used: String(currentValue + FUEL_STEP) }));
+                }
+            };
+
+            const decrementUsed = () => {
+                if (plannedUsedNumber === undefined) return;
+
+                if (!actualData.used) {
+                    const prevStepBoundary = Math.floor(plannedUsedNumber / FUEL_STEP) * FUEL_STEP;
+                    setActualData(prev => ({ ...prev, used: String(Math.max(0, prevStepBoundary)) }));
+                } else {
+                    const currentValue = Number(actualData.used);
+                    setActualData(prev => ({ ...prev, used: String(Math.max(0, currentValue - FUEL_STEP)) }));
+                }
+            };
+
             const decrementRemaining = () => {
                 if (plannedRemainingNumber === undefined) return;
 
@@ -1752,6 +1820,10 @@
                 if (plannedMinutes === null || actualMinutes === null) return null;
                 return actualMinutes - plannedMinutes;
             })();
+
+            const usedDifference = (plannedUsedNumber !== undefined && actualData.used !== "")
+                ? Number(actualData.used) - plannedUsedNumber
+                : null;
 
             const remainingDifference = (plannedRemainingNumber !== undefined && actualData.remaining !== "")
                 ? Number(actualData.remaining) - plannedRemainingNumber
@@ -1789,14 +1861,18 @@
                         h('div', { className: "flex items-center justify-between gap-3 mb-3" },
                             h('div', { className: "font-black text-base sm:text-xl text-gray-800 truncate" }, destinationTitle)
                         ),
-                        h('div', { className: "grid grid-cols-[130px_160px] gap-x-6 gap-y-0 min-w-max" },
+                        h('div', { className: "grid grid-cols-[130px_150px_160px] gap-x-6 gap-y-0 min-w-max" },
                             h('div', { className: "contents" },
                                 h('div', { className: "text-[10px] uppercase font-bold text-sky-500 tracking-wider mb-1" }, 'Time'),
+                                h('div', { className: "text-[10px] uppercase font-bold text-sky-500 tracking-wider mb-1" }, 'Used'),
                                 h('div', { className: "text-[10px] uppercase font-bold text-sky-500 tracking-wider mb-1" }, 'Remaining')
                             ),
                             h('div', { className: "contents" },
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
                                     renderPlannedWithDiff(plannedTime, timeDifference, "min")
+                                ),
+                                h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
+                                    renderPlannedWithDiff(plannedUsedDisplay, usedDifference, usedUnit)
                                 ),
                                 h('div', { className: UI_STYLES.rowHeight + " text-sm font-black text-sky-950" },
                                     renderPlannedWithDiff(plannedRemainingDisplay, remainingDifference, remainingUnit, true)
@@ -1808,6 +1884,9 @@
                 showDetail && h(OnBlockEndDetailModal, {
                     title: destinationTitle,
                     plannedTime,
+                    plannedUsedNumber,
+                    plannedUsedDisplay,
+                    usedUnit,
                     plannedRemainingNumber,
                     plannedRemainingDisplay,
                     remainingUnit,
@@ -1816,9 +1895,12 @@
                     onClose: () => setShowDetail(false),
                     incrementTime,
                     decrementTime,
+                    incrementUsed,
+                    decrementUsed,
                     incrementRemaining,
                     decrementRemaining,
                     timeDifference,
+                    usedDifference,
                     remainingDifference
                 })
             );
@@ -2521,7 +2603,8 @@
                             )
                         ),
                         h(OnBlockEndSection, {
-                            summary: flightSummaryData
+                            summary: flightSummaryData,
+                            route: routeData
                         })
                     )
                     : selectedPage === 'documents'
