@@ -2241,7 +2241,39 @@
 
             return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                 h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6" }, 'Weight'),
-                h('div', { className: "overflow-x-auto" },
+                h('div', { className: "sm:hidden space-y-3" },
+                    matrixRows.map((row) =>
+                        h('div', {
+                            key: `${row.key}-mobile`,
+                            className: "rounded-2xl border border-gray-200 p-3"
+                        },
+                            h('div', { className: "text-xs uppercase font-bold tracking-[0.2em] text-gray-500 mb-2" }, row.key),
+                            h('div', { className: "grid grid-cols-2 gap-2" },
+                                [
+                                    { key: 'DOM', label: 'DOM' },
+                                    { key: 'LOAD', label: 'LOAD' },
+                                    { key: 'ZFM', label: 'ZFM' },
+                                    { key: 'TOM', label: 'TOM' },
+                                    { key: 'LM', label: 'LM' }
+                                ].map((column) =>
+                                    h('div', { key: `${row.key}-${column.key}`, className: "bg-gray-50 rounded-xl px-2 py-2" },
+                                        h('div', { className: "text-[10px] uppercase font-bold tracking-wide text-gray-400 mb-1" }, column.label),
+                                        row.key === 'ACT'
+                                            ? h('input', {
+                                                type: 'number',
+                                                value: actualWeights[column.key],
+                                                onChange: (event) => setActualWeights((previous) => ({ ...previous, [column.key]: event.target.value })),
+                                                placeholder: '-',
+                                                className: "w-full bg-white border border-gray-200 rounded px-2 py-1 text-sm text-gray-700 focus:ring-1 focus:ring-blue-100 outline-none"
+                                            })
+                                            : h('div', { className: "text-sm font-bold text-gray-800" }, formatWeight(row.cells[column.key]))
+                                    )
+                                )
+                            )
+                        )
+                    )
+                ),
+                h('div', { className: "hidden sm:block overflow-x-auto" },
                     h('table', { className: "w-full min-w-[760px] text-sm" },
                         h('thead', null,
                             h('tr', { className: "text-left border-b border-gray-200" },
@@ -2503,7 +2535,37 @@
 
             return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                 h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6" }, 'Fuel'),
-                h('div', { className: "overflow-x-auto" },
+                h('div', { className: "sm:hidden space-y-4" },
+                    fuelGroups.flatMap((group) => {
+                        if (!group.rows.length) return [];
+
+                        return h('div', { key: `${group.key}-mobile`, className: "rounded-2xl border border-gray-200 overflow-hidden" },
+                            h('div', { className: "px-3 py-2 bg-gray-50 border-b border-gray-200 text-[10px] uppercase font-bold tracking-[0.2em] text-gray-500" }, group.title),
+                            h('div', { className: "divide-y divide-gray-100" },
+                                group.rows.map((row) =>
+                                    h('div', { key: `${row.key}-mobile`, className: "p-3" },
+                                        h('div', { className: "text-sm font-bold text-gray-800 mb-2" }, row.type),
+                                        h('div', { className: "grid grid-cols-3 gap-2 text-xs" },
+                                            h('div', null,
+                                                h('div', { className: "uppercase font-bold tracking-wide text-gray-400 mb-0.5" }, 'ARPT'),
+                                                h('div', { className: "font-semibold text-gray-700" }, row.arpt)
+                                            ),
+                                            h('div', null,
+                                                h('div', { className: "uppercase font-bold tracking-wide text-gray-400 mb-0.5" }, 'Fuel'),
+                                                h('div', { className: "font-bold text-gray-800" }, row.fuel)
+                                            ),
+                                            h('div', null,
+                                                h('div', { className: "uppercase font-bold tracking-wide text-gray-400 mb-0.5" }, 'Time'),
+                                                h('div', { className: "font-mono text-gray-700" }, row.time)
+                                            )
+                                        )
+                                    )
+                                )
+                            )
+                        );
+                    })
+                ),
+                h('div', { className: "hidden sm:block overflow-x-auto" },
                     h('table', { className: "w-full min-w-[760px] text-sm" },
                         h('thead', null,
                             h('tr', { className: "text-left border-b border-gray-200" },
@@ -2550,6 +2612,14 @@
         const FuelImpactPage = ({ summary }) => {
             const fuelAdjustments = Array.isArray(summary?.fuelAdjustments) ? summary.fuelAdjustments : [];
 
+            const formatReasonLabel = (value) => {
+                if (!value) return '-';
+                return String(value)
+                    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                    .replace(/_/g, ' ')
+                    .trim();
+            };
+
             const formatSignedValue = (value, unit) => {
                 if (value === undefined || value === null || value === '') return '-';
                 const numeric = Number(value);
@@ -2568,7 +2638,7 @@
 
                 return {
                     key: `${adjustment?.deviationReason || 'adjustment'}-${index}`,
-                    type: adjustment?.deviationReason || '-',
+                    type: formatReasonLabel(adjustment?.deviationReason),
                     unit: adjustment?.affectedItems?.unit ? String(adjustment.affectedItems.unit).toUpperCase() : '-',
                     variation: formatSignedValue(adjustment?.affectedItems?.deviationReasonChange, adjustment?.affectedItems?.unit),
                     fuelImpact: formatSignedValue(fuelItem?.value, fuelItem?.unit),
@@ -2585,7 +2655,32 @@
 
             return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                 h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6" }, 'Fuel Impact'),
-                h('div', { className: "overflow-x-auto" },
+                h('div', { className: "sm:hidden space-y-3" },
+                    impactRows.map((row) =>
+                        h('div', { key: `${row.key}-mobile`, className: "rounded-2xl border border-gray-200 p-3" },
+                            h('div', { className: "text-sm font-bold text-gray-800 mb-2 break-words" }, row.type),
+                            h('div', { className: "grid grid-cols-2 gap-2" },
+                                h('div', { className: "bg-gray-50 rounded-xl px-2 py-2" },
+                                    h('div', { className: "text-[10px] uppercase font-bold tracking-wide text-gray-400 mb-1" }, 'Unit'),
+                                    h('div', { className: "text-sm font-semibold text-gray-700" }, row.unit)
+                                ),
+                                h('div', { className: "bg-gray-50 rounded-xl px-2 py-2" },
+                                    h('div', { className: "text-[10px] uppercase font-bold tracking-wide text-gray-400 mb-1" }, 'Variation'),
+                                    h('div', { className: "text-sm text-gray-700 break-words" }, row.variation)
+                                ),
+                                h('div', { className: "bg-gray-50 rounded-xl px-2 py-2" },
+                                    h('div', { className: "text-[10px] uppercase font-bold tracking-wide text-gray-400 mb-1" }, 'Fuel Impact'),
+                                    h('div', { className: "text-sm font-bold text-gray-800 break-words" }, row.fuelImpact)
+                                ),
+                                h('div', { className: "bg-gray-50 rounded-xl px-2 py-2" },
+                                    h('div', { className: "text-[10px] uppercase font-bold tracking-wide text-gray-400 mb-1" }, 'Time Impact'),
+                                    h('div', { className: "text-sm text-gray-700 break-words" }, row.timeImpact)
+                                )
+                            )
+                        )
+                    )
+                ),
+                h('div', { className: "hidden sm:block overflow-x-auto" },
                     h('table', { className: "w-full min-w-[760px] text-sm" },
                         h('thead', null,
                             h('tr', { className: "text-left border-b border-gray-200" },
@@ -2599,7 +2694,7 @@
                         h('tbody', null,
                             impactRows.map((row) =>
                                 h('tr', { key: row.key, className: "border-b border-gray-100" },
-                                    h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, row.type),
+                                    h('td', { className: "py-2 pr-4 text-gray-700 font-semibold whitespace-normal break-words" }, row.type),
                                     h('td', { className: "py-2 pr-4 text-gray-600 font-semibold" }, row.unit),
                                     h('td', { className: "py-2 pr-4 text-gray-700" }, row.variation),
                                     h('td', { className: "py-2 pr-4 text-gray-800 font-bold" }, row.fuelImpact),
