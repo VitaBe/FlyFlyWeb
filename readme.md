@@ -1,8 +1,8 @@
-# **FlightLog Pro \- Stable Edition**
+# **FlyFly Web Demo \- Stable Edition**
 
 ## **Project Overview**
 
-FlightLog Pro is a lightweight, high-performance web application designed to visualize flight route data from ZIP-compatible export files (for example `.zip` or `.effarchive`) that contain a `routes.backup` file. It was specifically developed to handle complex flight data structures and present them in a clean, user-friendly interface optimized for mobile and desktop viewing.  
+FlyFly Web Demo is a lightweight, high-performance web application designed to visualize flight route data from ZIP-compatible export files (for example `.zip` or `.effarchive`) that contain a `routes.backup` file. It was specifically developed to handle complex flight data structures and present them in a clean, user-friendly interface optimized for mobile and desktop viewing.  
 The application is built as a **Single File Application (SFA)**, meaning all logic, styles, and templates are contained within a single HTML file. This ensures maximum portability and eliminates common "Script Errors" caused by CORS or external module loading in offline environments.
 
 ## **Core Functionality**
@@ -116,7 +116,7 @@ The app expects a JSON array or object containing:
 
 ## **Fuel Check — EFB Workflow**
 
-A core EFB (Electronic Flight Bag) function is the **fuel check**: at each waypoint the pilot compares the planned fuel values from the OFP against what is actually observed on the aircraft fuel gauges. FlightLog Pro implements this workflow end-to-end.
+A core EFB (Electronic Flight Bag) function is the **fuel check**: at each waypoint the pilot compares the planned fuel values from the OFP against what is actually observed on the aircraft fuel gauges. FlyFly Web Demo implements this workflow end-to-end.
 
 ### How It Works
 

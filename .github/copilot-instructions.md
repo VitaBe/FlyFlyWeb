@@ -1,8 +1,8 @@
-# FlightLog Pro — Project Guidelines
+# FlyFly Web Demo — Project Guidelines
 
 ## Project Summary
 
-**FlightLog Pro** is a browser-based Electronic Flight Folder (EFB) for pilots.  
+**FlyFly Web Demo** is a browser-based Electronic Flight Folder (EFB) for pilots.  
 It opens `.effarchive` / ZIP exports from an EFB mobile app, parses the embedded backup files,
 and provides a read/interactive representation of the flight plan.
 
