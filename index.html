@@ -5,6 +5,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FlyFly Web Demo - Stable Edition</title>
+    <script>
+        (() => {
+            try {
+                const storedTheme = localStorage.getItem('flyfly-theme');
+                const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const theme = storedTheme === 'dark' || storedTheme === 'light'
+                    ? storedTheme
+                    : (prefersDark ? 'dark' : 'light');
+
+                document.documentElement.dataset.theme = theme;
+            } catch (_) {
+                document.documentElement.dataset.theme = 'light';
+            }
+        })();
+    </script>
     <!-- React Dependencies -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"
@@ -15,9 +30,25 @@
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        :root {
+            color-scheme: light;
+        }
+
         body {
             background-color: #F5F5F7;
+            color: #111827;
             font-family: -apple-system, system-ui, sans-serif;
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+
+        html[data-theme="dark"] {
+            color-scheme: dark;
+        }
+
+        html[data-theme="dark"] body,
+        body[data-theme="dark"] {
+            background-color: #09111f;
+            color: #e6edf7;
         }
 
         .animate-in {
@@ -57,6 +88,160 @@
         button {
             min-height: 28px;
         }
+
+        html[data-theme="dark"] body .bg-white,
+        body[data-theme="dark"] .bg-white {
+            background-color: #0f1729 !important;
+        }
+
+        html[data-theme="dark"] body .bg-white\/90,
+        body[data-theme="dark"] .bg-white\/90 {
+            background-color: rgba(15, 23, 41, 0.9) !important;
+        }
+
+        html[data-theme="dark"] body .bg-gray-50,
+        body[data-theme="dark"] .bg-gray-50 {
+            background-color: #162033 !important;
+        }
+
+        html[data-theme="dark"] body .bg-gray-50\/80,
+        body[data-theme="dark"] .bg-gray-50\/80 {
+            background-color: rgba(22, 32, 51, 0.82) !important;
+        }
+
+        html[data-theme="dark"] body .bg-gray-100,
+        body[data-theme="dark"] .bg-gray-100 {
+            background-color: #1c2840 !important;
+        }
+
+        html[data-theme="dark"] body .bg-gray-200,
+        body[data-theme="dark"] .bg-gray-200 {
+            background-color: #27324a !important;
+        }
+
+        html[data-theme="dark"] body .bg-blue-100,
+        body[data-theme="dark"] .bg-blue-100 {
+            background-color: #14304f !important;
+        }
+
+        html[data-theme="dark"] body .bg-black\/40,
+        body[data-theme="dark"] .bg-black\/40 {
+            background-color: rgba(2, 6, 23, 0.72) !important;
+        }
+
+        html[data-theme="dark"] body .text-gray-800,
+        body[data-theme="dark"] .text-gray-800 {
+            color: #f8fbff !important;
+        }
+
+        html[data-theme="dark"] body .text-gray-700,
+        body[data-theme="dark"] .text-gray-700 {
+            color: #d9e3f4 !important;
+        }
+
+        html[data-theme="dark"] body .text-gray-600,
+        body[data-theme="dark"] .text-gray-600 {
+            color: #b7c4da !important;
+        }
+
+        html[data-theme="dark"] body .text-gray-500,
+        body[data-theme="dark"] .text-gray-500 {
+            color: #99a8c0 !important;
+        }
+
+        html[data-theme="dark"] body .text-gray-400,
+        body[data-theme="dark"] .text-gray-400 {
+            color: #7d8ca6 !important;
+        }
+
+        html[data-theme="dark"] body .text-gray-300,
+        body[data-theme="dark"] .text-gray-300 {
+            color: #697792 !important;
+        }
+
+        html[data-theme="dark"] body .text-blue-700,
+        body[data-theme="dark"] .text-blue-700 {
+            color: #93c5fd !important;
+        }
+
+        html[data-theme="dark"] body .text-sky-950,
+        body[data-theme="dark"] .text-sky-950 {
+            color: #e8f7ff !important;
+        }
+
+        html[data-theme="dark"] body .text-sky-500,
+        body[data-theme="dark"] .text-sky-500 {
+            color: #7dd3fc !important;
+        }
+
+        html[data-theme="dark"] body .border-gray-100,
+        body[data-theme="dark"] .border-gray-100 {
+            border-color: #1e293b !important;
+        }
+
+        html[data-theme="dark"] body .border-gray-200,
+        body[data-theme="dark"] .border-gray-200 {
+            border-color: #263249 !important;
+        }
+
+        html[data-theme="dark"] body .border-sky-60,
+        body[data-theme="dark"] .border-sky-60 {
+            border-color: #1f4a67 !important;
+        }
+
+        html[data-theme="dark"] body .ring-sky-200,
+        body[data-theme="dark"] .ring-sky-200 {
+            --tw-ring-color: rgba(125, 211, 252, 0.28) !important;
+        }
+
+        html[data-theme="dark"] body .from-sky-30,
+        body[data-theme="dark"] .from-sky-30 {
+            --tw-gradient-from: #102235 var(--tw-gradient-from-position) !important;
+            --tw-gradient-to: rgb(16 34 53 / 0) var(--tw-gradient-to-position) !important;
+            --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+        }
+
+        html[data-theme="dark"] body .via-cyan-30,
+        body[data-theme="dark"] .via-cyan-30 {
+            --tw-gradient-stops: var(--tw-gradient-from), #103143 var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+        }
+
+        html[data-theme="dark"] body .to-white,
+        body[data-theme="dark"] .to-white {
+            --tw-gradient-to: #08131f var(--tw-gradient-to-position) !important;
+        }
+
+        html[data-theme="dark"] body .hover\:bg-gray-50:hover,
+        body[data-theme="dark"] .hover\:bg-gray-50:hover {
+            background-color: #1b2740 !important;
+        }
+
+        html[data-theme="dark"] body .hover\:bg-gray-100:hover,
+        body[data-theme="dark"] .hover\:bg-gray-100:hover {
+            background-color: #22304b !important;
+        }
+
+        html[data-theme="dark"] body .hover\:bg-gray-200:hover,
+        body[data-theme="dark"] .hover\:bg-gray-200:hover {
+            background-color: #2b3b59 !important;
+        }
+
+        html[data-theme="dark"] body .hover\:text-gray-600:hover,
+        body[data-theme="dark"] .hover\:text-gray-600:hover {
+            color: #d3def0 !important;
+        }
+
+        html[data-theme="dark"] body .hover\:text-gray-700:hover,
+        html[data-theme="dark"] body .hover\:text-gray-800:hover,
+        body[data-theme="dark"] .hover\:text-gray-700:hover,
+        body[data-theme="dark"] .hover\:text-gray-800:hover {
+            color: #f8fbff !important;
+        }
+
+        html[data-theme="dark"] body input::placeholder,
+        body[data-theme="dark"] input::placeholder {
+            color: #64748b !important;
+        }
     </style>
 </head>
 
@@ -79,6 +264,23 @@
             rowHeight: "h-7 flex items-center",
             input: "w-full bg-gray-50 border-none rounded px-2 py-0.5 font-bold text-[11px] text-blue-600 placeholder:text-gray-300 focus:ring-1 focus:ring-blue-100 outline-none h-7",
             button: "px-3 py-0.5 bg-gray-50 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600 text-[8px] font-bold leading-none transition-colors"
+        };
+
+        const THEME_STORAGE_KEY = 'flyfly-theme';
+
+        const getInitialTheme = () => {
+            try {
+                const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+                if (storedTheme === 'dark' || storedTheme === 'light') {
+                    return storedTheme;
+                }
+            } catch (_) {}
+
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                return 'dark';
+            }
+
+            return 'light';
         };
 
         // Standard step size for fuel stepper buttons (▲/▼) in the EFB fuel check workflow.
@@ -2594,6 +2796,7 @@
             const [flightSummaryData, setFlightSummaryData] = useState(null);
             const [crewMembersData, setCrewMembersData] = useState(null);
             const [errorMessage, setErrorMessage] = useState(null);
+            const [theme, setTheme] = useState(getInitialTheme);
             const [showSettings, setShowSettings] = useState(false);
             const [selectedColumns, setSelectedColumns] = useState([]);
             const [selectedPage, setSelectedPage] = useState('summary');
@@ -2601,6 +2804,17 @@
             const [selectedDocumentIndex, setSelectedDocumentIndex] = useState(0);
             const [notams, setNotams] = useState([]);
             const [notamKeywords, setNotamKeywords] = useState([]);
+
+            const isDarkMode = theme === 'dark';
+
+            useEffect(() => {
+                document.documentElement.dataset.theme = theme;
+                document.body.dataset.theme = theme;
+
+                try {
+                    localStorage.setItem(THEME_STORAGE_KEY, theme);
+                } catch (_) {}
+            }, [theme]);
 
             useEffect(() => {
                 return () => {
@@ -2720,12 +2934,37 @@
                         h('button', {
                             onClick: () => setShowSettings(!showSettings),
                             className: "flex items-center justify-center text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 px-2 aspect-square rounded-2xl transition-colors shadow-sm",
-                            'aria-label': 'Toggle column settings',
-                            title: 'Column settings'
+                            'aria-label': 'Toggle settings menu',
+                            title: 'Settings'
                         }, h(Icon, { name: "settings", className: "w-4 h-4" })),
                         showSettings && h('div', {
                             className: "absolute top-11 right-0 z-20 bg-white border border-gray-200 rounded-2xl shadow-xl p-4 w-[min(92vw,440px)] animate-in"
                         },
+                            h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Appearance"),
+                            h('label', {
+                                className: "flex items-center justify-between gap-3 rounded-2xl bg-gray-50 px-3 py-3 cursor-pointer group"
+                            },
+                                h('div', { className: "min-w-0" },
+                                    h('p', { className: "text-sm font-bold text-gray-700 group-hover:text-gray-800" }, "Dark mode"),
+                                    h('p', { className: "text-xs text-gray-400 mt-0.5" }, "Switch to a night-friendly interface.")
+                                ),
+                                h('span', {
+                                    className: `relative inline-flex h-7 w-12 items-center rounded-full transition-colors ${isDarkMode ? 'bg-blue-600' : 'bg-gray-200'}`
+                                },
+                                    h('span', {
+                                        className: `inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${isDarkMode ? 'translate-x-6' : 'translate-x-1'}`
+                                    })
+                                ),
+                                h('input', {
+                                    type: 'checkbox',
+                                    className: "sr-only",
+                                    checked: isDarkMode,
+                                    onChange: () => setTheme((previousTheme) => previousTheme === 'dark' ? 'light' : 'dark')
+                                })
+                            ),
+
+                            h('div', { className: "border-t border-gray-100 my-3" }),
+
                             // Overview section
                             h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Overview"),
                             h('p', { className: "text-xs text-gray-400 mb-3" }, "No settings"),
