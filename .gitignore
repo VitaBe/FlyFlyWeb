@@ -78,3 +78,5 @@ settings.json
 *.json
 *.effarchive
 exampleFull
+data/*
+

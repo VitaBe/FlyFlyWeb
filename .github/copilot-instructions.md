@@ -10,6 +10,52 @@ Full project overview: see [readme.md](../readme.md).
 
 ---
 
+## Repository Structure
+
+```
+index.html                  — entire application (single file)
+readme.md
+data/
+  EDDF_KJFK_CLEAN/          — full outbound flight (Frankfurt → New York JFK), all backups present
+  KJFK_EDDF_EMPTY/          — return flight (New York JFK → Frankfurt), all backups present
+```
+
+### Test / Development Data
+
+The `data/` directory contains **pre-extracted `.effarchive` contents** for two real-world test flights (March 2026). Both directories can be re-zipped into a `.effarchive` (ZIP) and loaded via the upload screen to test or develop features without needing a real EFB export.
+
+| Directory | Route | Notes |
+|-----------|-------|-------|
+| `data/EDDF_KJFK_CLEAN/` | EDDF → KJFK | Complete dataset: all `.backup` files, PDFs, weather charts (GIF/JPEG), crew docs. Use this as the primary test fixture. Also contains pre-packaged `.effarchive` files (`EDDF_KJFK.effarchive`, `KJFK_EDDF_EMPTY.effarchive`, `exampleFull.effarchive`) for direct upload. |
+| `data/KJFK_EDDF_EMPTY/` | KJFK → EDDF | Return leg with the same file layout. Use this to test that the app handles a second, independent flight correctly. |
+
+**Backup files present in both datasets:**
+
+| File | Contents |
+|------|----------|
+| `routes.backup` | Waypoint list with fuel, time, and track data |
+| `flight.backup` | Flight metadata: callsign, aircraft, airports, planned fuels, OptiClimb, ATC text |
+| `crewMembers.backup` | Crew roster |
+| `documents.backup` | Manifest of attached document files |
+| `notams.backup` | NOTAM entries grouped by station |
+| `notamKeywords.backup` | Keyword → colour mappings for NOTAM highlighting |
+| `airports.backup` | Airport detail records |
+| `delays.backup` | Delay log entries |
+| `hazards.backup` | Weather hazard entries |
+| `info.backup` | Supplementary info records |
+| `fuelReasons.backup` | Fuel deviation reasons |
+| `overburnFuelReasons.backup` | Overburn fuel deviation reasons |
+| `raimAirports.backup` | RAIM prediction airport list |
+
+**Attached document types present:** PDF (OFP, landing calc, GenDec, FSN, etc.), JPEG (satellite imagery), GIF (SIGWX charts, vertical profile, upper wind charts), TXT (crew alerts, bulletins).
+
+To create a loadable archive from either directory, zip its contents (not the directory itself):
+```sh
+cd data/EDDF_KJFK_CLEAN && zip -r ../../test-flight.effarchive . -x "*.DS_Store" "*.effarchive"
+```
+
+---
+
 ## Architecture
 
 ### Single-File Application — the golden rule
