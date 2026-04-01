@@ -1928,13 +1928,25 @@
                 crewMembers && crewMembers.length > 0 && h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                     h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6 uppercase" }, "Crew"),
                     h('div', { className: "space-y-1" },
-                        crewMembers.map((member) =>
-                            h(SummaryRow, {
-                                key: member.userId || member.employeeId,
-                                label: formatCrewFunction(member.function),
-                                value: `${member.firstName} ${member.lastName}${member.employeeId ? `  -  ${member.employeeId}` : ''}`
+                        crewMembers
+                            .slice()
+                            .sort((a, b) => {
+                                const roleOrder = { 'COMMANDER': 0, 'FIRST_OFFICER': 1 };
+                                const roleA = roleOrder[a.function] ?? 2;
+                                const roleB = roleOrder[b.function] ?? 2;
+                                if (roleA !== roleB) return roleA - roleB;
+                                return (a.employeeId || '').localeCompare(b.employeeId || '');
                             })
-                        )
+                            .map((member) =>
+                                h('div', {
+                                    key: member.userId || member.employeeId,
+                                    className: "grid grid-cols-[minmax(130px,1fr)_minmax(80px,auto)_minmax(120px,1fr)] gap-3 sm:gap-6 py-1.5"
+                                },
+                                    h('p', { className: "text-gray-400 font-medium text-sm sm:text-base" }, formatCrewFunction(member.function)),
+                                    h('p', { className: "text-gray-500 font-mono text-sm sm:text-base" }, member.employeeId || '-'),
+                                    h('p', { className: "text-gray-700 font-extrabold text-sm sm:text-xl leading-tight" }, `${member.firstName} ${member.lastName}`)
+                                )
+                            )
                     )
                 )
             );
@@ -2725,12 +2737,12 @@
                             h('div', { className: "border-t border-gray-100 my-3" }),
 
                             h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Documents"),
-                            h('p', { className: "text-xs text-gray-400 mb-3" }, "Select documents directly on the Documents tab"),
+                            h('p', { className: "text-xs text-gray-400 mb-3" }, "No settings"),
 
                             h('div', { className: "border-t border-gray-100 my-3" }),
 
                             h('p', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mb-2" }, "Stations"),
-                            h('p', { className: "text-xs text-gray-400 mb-3" }, "Keyword colors are loaded from notamKeywords.backup"),
+                            h('p', { className: "text-xs text-gray-400 mb-3" }, "No settings"),
 
                             h('div', { className: "border-t border-gray-100 my-3" }),
 
