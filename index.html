@@ -1982,6 +1982,8 @@
          * @param {Object|null} props.summary - Parsed flight backup object
          */
         const FlightSummaryPage = ({ summary, crewMembers }) => {
+            const [atcShareStatus, setAtcShareStatus] = useState('');
+
             if (!summary) {
                 return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
                     h('h3', { className: "text-lg font-bold mb-2" }, "Overview"),
@@ -2047,6 +2049,37 @@
                     /opticlimb/i.test(entry?.title || '') || /opticlimb/i.test(entry?.text || '')
                 )?.text || ''
             );
+
+            const handleShareAtc = async () => {
+                if (!atcText) return;
+
+                setAtcShareStatus('');
+
+                try {
+                    if (navigator.share) {
+                        await navigator.share({
+                            title: 'ATC Flight Plan',
+                            text: atcText
+                        });
+                        setAtcShareStatus('Shared successfully.');
+                        return;
+                    }
+
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(atcText);
+                        setAtcShareStatus('ATC text copied to clipboard.');
+                        return;
+                    }
+
+                    setAtcShareStatus('Sharing not supported on this device.');
+                } catch (error) {
+                    if (error && error.name === 'AbortError') {
+                        setAtcShareStatus('Share canceled.');
+                        return;
+                    }
+                    setAtcShareStatus('Unable to share ATC text.');
+                }
+            };
 
             const rowsLeft = [
                 { label: 'AC type', value: summary.acType || '-' },
@@ -2115,7 +2148,15 @@
                 ),
 
                 atcText && h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
-                    h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6 uppercase" }, "ATC Flight Plan"),
+                    h('div', { className: "flex items-center justify-between gap-3 mb-4 sm:mb-6" },
+                        h('h3', { className: "text-base sm:text-xl font-black text-gray-800 uppercase" }, "ATC Flight Plan"),
+                        h('button', {
+                            type: 'button',
+                            onClick: handleShareAtc,
+                            className: "px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap bg-blue-600 text-white hover:bg-blue-700 transition"
+                        }, 'Share')
+                    ),
+                    atcShareStatus && h('p', { className: "text-xs sm:text-sm text-gray-500 mb-3" }, atcShareStatus),
                     h('pre', {
                         className: "whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed text-gray-700 bg-gray-50 rounded-2xl p-4 overflow-x-auto font-mono"
                     }, atcText)
@@ -3364,6 +3405,7 @@
             const [selectedDocumentIndex, setSelectedDocumentIndex] = useState(0);
             const [notams, setNotams] = useState([]);
             const [notamKeywords, setNotamKeywords] = useState([]);
+            const [shareActionStatus, setShareActionStatus] = useState('');
 
             const isDarkMode = theme === 'dark';
 
@@ -3448,6 +3490,42 @@
                 );
             };
 
+            const handleShareToMPilot = async () => {
+                const atcText = typeof flightSummaryData?.ATC === 'string' ? flightSummaryData.ATC.trim() : '';
+                if (!atcText) {
+                    setShareActionStatus('No ATC text available to share.');
+                    return;
+                }
+
+                setShareActionStatus('');
+
+                try {
+                    if (navigator.share) {
+                        await navigator.share({
+                            title: 'ATC Flight Plan',
+                            text: atcText
+                        });
+                        setShareActionStatus('ATC flight plan shared successfully.');
+                        return;
+                    }
+
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(atcText);
+                        setShareActionStatus('ATC flight plan copied to clipboard.');
+                        return;
+                    }
+
+                    setShareActionStatus('Sharing is not supported on this device.');
+                } catch (error) {
+                    if (error && error.name === 'AbortError') {
+                        setShareActionStatus('Share canceled.');
+                        return;
+                    }
+
+                    setShareActionStatus('Unable to share ATC flight plan.');
+                }
+            };
+
             // Show welcome screen if no route data is loaded
             if (!routeData) {
                 return h(WelcomeScreen, {
@@ -3508,7 +3586,11 @@
                                     setSelectedPage('documents');
                                     setShowSettings(false);
                                 }
-                            }, 'Documents')
+                            }, 'Documents'),
+                            h('button', {
+                                className: "px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition bg-gray-100 text-gray-600 hover:bg-gray-200",
+                                onClick: handleShareToMPilot
+                            }, '⤴ MPilot')
                         )
                     ),
                     h('div', { className: "relative shrink-0" },
@@ -3607,6 +3689,7 @@
                         )
                     )
                 ),
+                shareActionStatus && h('p', { className: "text-xs sm:text-sm text-gray-500 mb-4 -mt-2" }, shareActionStatus),
 
                 // Route header is shown only on Overview page
                 selectedPage === 'summary' && h(RouteHeader, {
