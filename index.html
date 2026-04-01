@@ -2645,8 +2645,11 @@
                     setRouteData(processedRoute);
                     setFlightSummaryData(processedSummary);
                     setCrewMembersData(Array.isArray(processedCrew) ? processedCrew : null);
+                    const paperFlightPlanIndex = mappedDocuments.findIndex((doc) =>
+                        doc.name.toLowerCase().includes('paperflightplan')
+                    );
                     setDocuments(mappedDocuments);
-                    setSelectedDocumentIndex(0);
+                    setSelectedDocumentIndex(paperFlightPlanIndex !== -1 ? paperFlightPlanIndex : 0);
                     setNotams(processedNotams);
                     setNotamKeywords(processedNotamKeywords);
                     setSelectedPage('summary');
