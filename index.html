@@ -2224,6 +2224,8 @@
          */
         const FuelPage = ({ summary }) => {
             const plannedFuels = Array.isArray(summary?.plannedFuels) ? summary.plannedFuels : [];
+            const originAirportCode = summary?.originAirport?.icaoCode || summary?.originAirport?.iataCode || '-';
+            const destinationAirportCode = summary?.destinationAirport?.icaoCode || summary?.destinationAirport?.iataCode || '-';
 
             const formatLabel = (rawKey) => {
                 if (!rawKey) return '-';
@@ -2263,6 +2265,131 @@
             };
 
             const fuelRows = plannedFuels.flatMap((entry, index) => toRows(entry, index));
+            const fuelByUid = new Map();
+            plannedFuels.forEach((entry, index) => {
+                if (entry?.uid) {
+                    fuelByUid.set(entry.uid, { entry, index });
+                }
+            });
+
+            const displayLabelByUid = {
+                tripFuel: 'TRIP',
+                contingencyFuel: 'CONT',
+                finalReserveFuel: 'FINRES',
+                alternatesFuel: 'ALTN',
+                etopsAddFuel: 'ETOPS ADDFU',
+                cfsFuel: 'CFS ADDFU',
+                unusableFuel: 'UNUSABLE',
+                takeOffFuel: 'T/O FUEL',
+                taxiFuel: 'TAXI',
+                blockFuel: 'BLOCK FUEL',
+                extraFuel: 'EXTRA',
+                nicFuel: 'N.I.C',
+                tankeringFuel: 'TANKERING',
+                apuTaxiFuel: 'APU TAXI',
+                discretionaryFuel: 'DISC',
+                touchDownFuel: 'TOUCH DOWN',
+                holdingFuel: 'HOLDING'
+            };
+
+            const extractAirportCode = (value) => {
+                if (!value || typeof value !== 'string') return null;
+                const code = value.split('/')[0]?.trim();
+                return code || null;
+            };
+
+            const resolveAirport = (uid, details) => {
+                const parsedFromDetails = extractAirportCode(details);
+                if (parsedFromDetails) return parsedFromDetails;
+
+                if (['tripFuel', 'takeOffFuel', 'taxiFuel', 'blockFuel', 'apuTaxiFuel'].includes(uid)) {
+                    return originAirportCode;
+                }
+
+                if (uid === 'touchDownFuel') {
+                    return destinationAirportCode;
+                }
+
+                return '-';
+            };
+
+            const formatFuelCell = (amount, unit) => {
+                if (amount === undefined || amount === null) return '-';
+                const formattedAmount = formatNumber(amount);
+                const formattedUnit = unit ? String(unit).toUpperCase() : '';
+                return `${formattedAmount}${formattedUnit ? ` ${formattedUnit}` : ''}`;
+            };
+
+            const buildRowsForUid = (uid) => {
+                const fuelData = fuelByUid.get(uid);
+                if (!fuelData) return [];
+
+                const rows = toRows(fuelData.entry, fuelData.index);
+                const displayType = displayLabelByUid[uid] || formatLabel(uid).toUpperCase();
+
+                return rows
+                    .filter((row) => row.amount !== undefined && row.amount !== null || Boolean(row.time))
+                    .map((row, rowIndex) => ({
+                        key: `${uid}-${rowIndex}`,
+                        type: rowIndex === 0 ? displayType : `${displayType} ${rowIndex + 1}`,
+                        arpt: resolveAirport(uid, row.details),
+                        fuel: formatFuelCell(row.amount, row.unit),
+                        time: row.time ? formatDurationToHourMinute(row.time) : '-'
+                    }));
+            };
+
+            const alternatesRows = buildRowsForUid('alternatesFuel');
+
+            const fuelGroups = [
+                {
+                    key: 'planning',
+                    title: 'Planning',
+                    rows: [
+                        ...buildRowsForUid('tripFuel'),
+                        ...buildRowsForUid('contingencyFuel'),
+                        ...alternatesRows.slice(0, 1),
+                        ...buildRowsForUid('finalReserveFuel'),
+                        ...buildRowsForUid('etopsAddFuel'),
+                        ...buildRowsForUid('cfsFuel')
+                    ]
+                },
+                {
+                    key: 'departure',
+                    title: 'Departure',
+                    rows: [
+                        ...buildRowsForUid('takeOffFuel'),
+                        ...buildRowsForUid('taxiFuel')
+                    ]
+                },
+                {
+                    key: 'block',
+                    title: 'Block',
+                    rows: [
+                        ...buildRowsForUid('blockFuel')
+                    ]
+                },
+                {
+                    key: 'additional',
+                    title: 'Additional',
+                    rows: [
+                        ...buildRowsForUid('extraFuel'),
+                        ...buildRowsForUid('discretionaryFuel'),
+                        ...buildRowsForUid('nicFuel'),
+                        ...buildRowsForUid('tankeringFuel'),
+                        ...buildRowsForUid('apuTaxiFuel'),
+                        ...buildRowsForUid('holdingFuel'),
+                        ...buildRowsForUid('touchDownFuel'),
+                        ...buildRowsForUid('unusableFuel')
+                    ]
+                },
+                {
+                    key: 'alternates',
+                    title: 'Alternates',
+                    rows: [
+                        ...alternatesRows.slice(1)
+                    ]
+                }
+            ];
 
             if (!summary || fuelRows.length === 0) {
                 return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
@@ -2278,24 +2405,33 @@
                         h('thead', null,
                             h('tr', { className: "text-left border-b border-gray-200" },
                                 h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Type'),
-                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Amount'),
-                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Time'),
-                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Unit'),
-                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Details')
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'ARPT'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Fuel'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Time')
                             )
                         ),
                         h('tbody', null,
-                            fuelRows.map((row) =>
-                                h('tr', { key: row.key, className: "border-b border-gray-100" },
-                                    h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, row.type || '-'),
-                                    h('td', { className: "py-2 pr-4 text-gray-800 font-bold" }, row.amount !== undefined ? formatNumber(row.amount) : '-'),
-                                    h('td', { className: "py-2 pr-4 text-gray-700" },
-                                        row.time ? formatDurationToHourMinute(row.time) : '-'
+                            fuelGroups.flatMap((group) => {
+                                const groupedRows = group.rows;
+                                if (groupedRows.length === 0) return [];
+
+                                return [
+                                    h('tr', { key: `${group.key}-header`, className: "border-b border-gray-200 bg-gray-50" },
+                                        h('td', {
+                                            colSpan: 4,
+                                            className: "py-2 pr-4 text-[10px] uppercase font-bold tracking-[0.2em] text-gray-500"
+                                        }, group.title)
                                     ),
-                                    h('td', { className: "py-2 pr-4 text-gray-600 font-semibold" }, row.unit ? String(row.unit).toUpperCase() : '-'),
-                                    h('td', { className: "py-2 pr-4 text-gray-600" }, row.details)
-                                )
-                            )
+                                    ...groupedRows.map((row) =>
+                                        h('tr', { key: row.key, className: "border-b border-gray-100" },
+                                            h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, row.type),
+                                            h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, row.arpt),
+                                            h('td', { className: "py-2 pr-4 text-gray-800 font-bold" }, row.fuel),
+                                            h('td', { className: "py-2 pr-4 text-gray-700 font-mono" }, row.time)
+                                        )
+                                    )
+                                ];
+                            })
                         )
                     )
                 )
