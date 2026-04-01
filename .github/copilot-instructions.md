@@ -16,18 +16,22 @@ Full project overview: see [readme.md](../readme.md).
 index.html                  — entire application (single file)
 readme.md
 data/
-  EDDF_KJFK_CLEAN/          — full outbound flight (Frankfurt → New York JFK), all backups present
-  KJFK_EDDF_EMPTY/          — return flight (New York JFK → Frankfurt), all backups present
+  EDDF_KJFK.effarchive  — outbound flight archive (Frankfurt → New York JFK), upload directly
+  KJFK_EDDF.effarchive  — return flight archive (New York JFK → Frankfurt), upload directly
+  EDDF_KJFK/            — extracted contents of above archive (for inspection/development)
+  KJFK_EDDF/            — extracted contents of return-leg archive
 ```
 
 ### Test / Development Data
 
-The `data/` directory contains **pre-extracted `.effarchive` contents** for two real-world test flights (March 2026). Both directories can be re-zipped into a `.effarchive` (ZIP) and loaded via the upload screen to test or develop features without needing a real EFB export.
+The `data/` directory contains two real-world test flights (March 2026) in both extracted and ready-to-upload form.
 
-| Directory | Route | Notes |
-|-----------|-------|-------|
-| `data/EDDF_KJFK_CLEAN/` | EDDF → KJFK | Complete dataset: all `.backup` files, PDFs, weather charts (GIF/JPEG), crew docs. Use this as the primary test fixture. Also contains pre-packaged `.effarchive` files (`EDDF_KJFK.effarchive`, `KJFK_EDDF_EMPTY.effarchive`, `exampleFull.effarchive`) for direct upload. |
-| `data/KJFK_EDDF_EMPTY/` | KJFK → EDDF | Return leg with the same file layout. Use this to test that the app handles a second, independent flight correctly. |
+| Path | Route | Notes |
+|------|-------|-------|
+| `data/EDDF_KJFK.effarchive` | EDDF → KJFK | **Primary test fixture** — upload directly via the upload screen. |
+| `data/KJFK_EDDF.effarchive` | KJFK → EDDF | Return leg — upload directly to test a second independent flight. |
+| `data/EDDF_KJFK/` | EDDF → KJFK | Extracted contents of the above archive for inspection or development. |
+| `data/KJFK_EDDF/` | KJFK → EDDF | Extracted contents of the return-leg archive. |
 
 **Backup files present in both datasets:**
 
@@ -49,9 +53,9 @@ The `data/` directory contains **pre-extracted `.effarchive` contents** for two 
 
 **Attached document types present:** PDF (OFP, landing calc, GenDec, FSN, etc.), JPEG (satellite imagery), GIF (SIGWX charts, vertical profile, upper wind charts), TXT (crew alerts, bulletins).
 
-To create a loadable archive from either directory, zip its contents (not the directory itself):
+The `.effarchive` files at `data/EDDF_KJFK.effarchive` and `data/KJFK_EDDF.effarchive` are already packaged and can be uploaded directly — no zipping required. If you need to rebuild one from the extracted directory:
 ```sh
-cd data/EDDF_KJFK_CLEAN && zip -r ../../test-flight.effarchive . -x "*.DS_Store" "*.effarchive"
+cd data/EDDF_KJFK && zip -r ../EDDF_KJFK.effarchive . -x "*.DS_Store"
 ```
 
 ---
