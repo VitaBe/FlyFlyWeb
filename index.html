@@ -2169,19 +2169,70 @@
          */
         const WeightPage = ({ summary }) => {
             const weights = summary?.weights;
-            const weightRows = weights && typeof weights === 'object'
-                ? Object.entries(weights)
-                : [];
-
-            const formatLabel = (rawKey) => {
-                if (!rawKey) return '-';
-                return rawKey
-                    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-                    .replace(/_/g, ' ')
-                    .replace(/\b\w/g, (char) => char.toUpperCase());
+            const [actualWeights, setActualWeights] = useState({
+                DOM: '',
+                LOAD: '',
+                ZFM: '',
+                TOM: '',
+                LM: ''
+            });
+            const getWeightValue = (key) => {
+                const value = weights?.[key]?.value;
+                return (value === undefined || value === null || isNaN(Number(value))) ? null : Number(value);
             };
 
-            if (!summary || weightRows.length === 0) {
+            const formatWeight = (value) => {
+                if (value === null || value === undefined) return '';
+                return String(Math.round(value));
+            };
+
+            const maxLoad = (() => {
+                const maxPayload = getWeightValue('MPayload');
+                if (maxPayload !== null) return maxPayload;
+
+                const maxZfw = getWeightValue('MZFW');
+                const dom = getWeightValue('DOW');
+                if (maxZfw !== null && dom !== null) {
+                    return Math.max(0, maxZfw - dom);
+                }
+
+                return null;
+            })();
+
+            const matrixRows = [
+                {
+                    key: 'MAX',
+                    cells: {
+                        DOM: null,
+                        LOAD: maxLoad,
+                        ZFM: getWeightValue('MZFW'),
+                        TOM: getWeightValue('MTOW'),
+                        LM: getWeightValue('MLW')
+                    }
+                },
+                {
+                    key: 'EST',
+                    cells: {
+                        DOM: getWeightValue('DOW'),
+                        LOAD: getWeightValue('payload'),
+                        ZFM: getWeightValue('ZFW'),
+                        TOM: getWeightValue('TOW'),
+                        LM: getWeightValue('LW')
+                    }
+                },
+                {
+                    key: 'ACT',
+                    cells: {
+                        DOM: null,
+                        LOAD: null,
+                        ZFM: null,
+                        TOM: null,
+                        LM: null
+                    }
+                }
+            ];
+
+            if (!summary || !weights || typeof weights !== 'object') {
                 return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
                     h('h3', { className: "text-lg font-bold mb-2" }, 'Weight'),
                     h('p', null, 'No weight data found in flight.backup.')
@@ -2191,23 +2242,75 @@
             return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
                 h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6" }, 'Weight'),
                 h('div', { className: "overflow-x-auto" },
-                    h('table', { className: "w-full min-w-[560px] text-sm" },
+                    h('table', { className: "w-full min-w-[760px] text-sm" },
                         h('thead', null,
                             h('tr', { className: "text-left border-b border-gray-200" },
-                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Type'),
-                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Value'),
-                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Unit')
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, ''),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'DOM'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'LOAD'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'ZFM'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'TOM'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'LM')
                             )
                         ),
                         h('tbody', null,
-                            weightRows.map(([key, weightValue]) =>
-                                h('tr', { key, className: "border-b border-gray-100" },
-                                    h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, formatLabel(key)),
+                            matrixRows.map((row) =>
+                                h('tr', { key: row.key, className: "border-b border-gray-100" },
+                                    h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, row.key),
                                     h('td', { className: "py-2 pr-4 text-gray-800 font-bold" },
-                                        weightValue?.value !== undefined ? formatNumber(weightValue.value) : '-'
+                                        row.key === 'ACT'
+                                            ? h('input', {
+                                                type: 'number',
+                                                value: actualWeights.DOM,
+                                                onChange: (event) => setActualWeights((previous) => ({ ...previous, DOM: event.target.value })),
+                                                placeholder: '-',
+                                                className: "w-24 bg-gray-50 border-none rounded px-2 py-1 text-sm text-gray-700 focus:ring-1 focus:ring-blue-100 outline-none"
+                                            })
+                                            : formatWeight(row.cells.DOM)
                                     ),
-                                    h('td', { className: "py-2 pr-4 text-gray-600 font-semibold" },
-                                        weightValue?.unit ? String(weightValue.unit).toUpperCase() : '-'
+                                    h('td', { className: "py-2 pr-4 text-gray-800 font-bold" },
+                                        row.key === 'ACT'
+                                            ? h('input', {
+                                                type: 'number',
+                                                value: actualWeights.LOAD,
+                                                onChange: (event) => setActualWeights((previous) => ({ ...previous, LOAD: event.target.value })),
+                                                placeholder: '-',
+                                                className: "w-24 bg-gray-50 border-none rounded px-2 py-1 text-sm text-gray-700 focus:ring-1 focus:ring-blue-100 outline-none"
+                                            })
+                                            : formatWeight(row.cells.LOAD)
+                                    ),
+                                    h('td', { className: "py-2 pr-4 text-gray-800 font-bold" },
+                                        row.key === 'ACT'
+                                            ? h('input', {
+                                                type: 'number',
+                                                value: actualWeights.ZFM,
+                                                onChange: (event) => setActualWeights((previous) => ({ ...previous, ZFM: event.target.value })),
+                                                placeholder: '-',
+                                                className: "w-24 bg-gray-50 border-none rounded px-2 py-1 text-sm text-gray-700 focus:ring-1 focus:ring-blue-100 outline-none"
+                                            })
+                                            : formatWeight(row.cells.ZFM)
+                                    ),
+                                    h('td', { className: "py-2 pr-4 text-gray-800 font-bold" },
+                                        row.key === 'ACT'
+                                            ? h('input', {
+                                                type: 'number',
+                                                value: actualWeights.TOM,
+                                                onChange: (event) => setActualWeights((previous) => ({ ...previous, TOM: event.target.value })),
+                                                placeholder: '-',
+                                                className: "w-24 bg-gray-50 border-none rounded px-2 py-1 text-sm text-gray-700 focus:ring-1 focus:ring-blue-100 outline-none"
+                                            })
+                                            : formatWeight(row.cells.TOM)
+                                    ),
+                                    h('td', { className: "py-2 pr-4 text-gray-800 font-bold" },
+                                        row.key === 'ACT'
+                                            ? h('input', {
+                                                type: 'number',
+                                                value: actualWeights.LM,
+                                                onChange: (event) => setActualWeights((previous) => ({ ...previous, LM: event.target.value })),
+                                                placeholder: '-',
+                                                className: "w-24 bg-gray-50 border-none rounded px-2 py-1 text-sm text-gray-700 focus:ring-1 focus:ring-blue-100 outline-none"
+                                            })
+                                            : formatWeight(row.cells.LM)
                                     )
                                 )
                             )
