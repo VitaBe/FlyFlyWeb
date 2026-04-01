@@ -875,6 +875,21 @@
         };
 
         /**
+         * Formats an ISO-8601 duration (PTxHxMxS) to HH:MM.
+         * Example: PT8H20M20S -> 08:20
+         * @param {string} duration - ISO duration string.
+         * @returns {string} HH:MM or '-' when invalid.
+         */
+        const formatDurationToHourMinute = (duration) => {
+            const totalMinutes = parseDurationToMinutes(duration);
+            if (totalMinutes === null) return '-';
+
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        };
+
+        /**
          * Sanitizes a limited HTML fragment from flight.backup while preserving
          * simple formatting such as line breaks, bold text, and bullet lists.
          * @param {string} htmlText - Raw HTML-like text from flight.backup.
@@ -2148,6 +2163,217 @@
         };
 
         /**
+         * WeightPage - Displays aircraft/flight weights from flight.backup.
+         * @param {Object} props
+         * @param {Object|null} props.summary - Parsed flight backup object
+         */
+        const WeightPage = ({ summary }) => {
+            const weights = summary?.weights;
+            const weightRows = weights && typeof weights === 'object'
+                ? Object.entries(weights)
+                : [];
+
+            const formatLabel = (rawKey) => {
+                if (!rawKey) return '-';
+                return rawKey
+                    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, (char) => char.toUpperCase());
+            };
+
+            if (!summary || weightRows.length === 0) {
+                return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
+                    h('h3', { className: "text-lg font-bold mb-2" }, 'Weight'),
+                    h('p', null, 'No weight data found in flight.backup.')
+                );
+            }
+
+            return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6" }, 'Weight'),
+                h('div', { className: "overflow-x-auto" },
+                    h('table', { className: "w-full min-w-[560px] text-sm" },
+                        h('thead', null,
+                            h('tr', { className: "text-left border-b border-gray-200" },
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Type'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Value'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Unit')
+                            )
+                        ),
+                        h('tbody', null,
+                            weightRows.map(([key, weightValue]) =>
+                                h('tr', { key, className: "border-b border-gray-100" },
+                                    h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, formatLabel(key)),
+                                    h('td', { className: "py-2 pr-4 text-gray-800 font-bold" },
+                                        weightValue?.value !== undefined ? formatNumber(weightValue.value) : '-'
+                                    ),
+                                    h('td', { className: "py-2 pr-4 text-gray-600 font-semibold" },
+                                        weightValue?.unit ? String(weightValue.unit).toUpperCase() : '-'
+                                    )
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        };
+
+        /**
+         * FuelPage - Displays planned fuels from flight.backup (plannedFuels array).
+         * @param {Object} props
+         * @param {Object|null} props.summary - Parsed flight backup object
+         */
+        const FuelPage = ({ summary }) => {
+            const plannedFuels = Array.isArray(summary?.plannedFuels) ? summary.plannedFuels : [];
+
+            const formatLabel = (rawKey) => {
+                if (!rawKey) return '-';
+                return rawKey
+                    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                    .replace(/_/g, ' ')
+                    .replace(/\b\w/g, (char) => char.toUpperCase());
+            };
+
+            const toRows = (fuelEntry, parentIndex) => {
+                const rows = [];
+                const entryLabel = formatLabel(fuelEntry?.uid);
+
+                if (Array.isArray(fuelEntry?.fuels) && fuelEntry.fuels.length > 0) {
+                    fuelEntry.fuels.forEach((item, index) => {
+                        rows.push({
+                            key: `${fuelEntry.uid || 'fuel'}-${index}`,
+                            type: entryLabel,
+                            amount: item?.amount,
+                            time: item?.time,
+                            unit: item?.unit,
+                            details: item?.extraData || '-'
+                        });
+                    });
+                } else {
+                    rows.push({
+                        key: fuelEntry?.uid || `fuel-entry-${parentIndex}`,
+                        type: entryLabel,
+                        amount: fuelEntry?.fuel?.amount,
+                        time: fuelEntry?.fuel?.time,
+                        unit: fuelEntry?.fuel?.unit,
+                        details: fuelEntry?.fuel?.extraData || '-'
+                    });
+                }
+
+                return rows;
+            };
+
+            const fuelRows = plannedFuels.flatMap((entry, index) => toRows(entry, index));
+
+            if (!summary || fuelRows.length === 0) {
+                return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
+                    h('h3', { className: "text-lg font-bold mb-2" }, 'Fuel'),
+                    h('p', null, 'No planned fuel data found in flight.backup.')
+                );
+            }
+
+            return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6" }, 'Fuel'),
+                h('div', { className: "overflow-x-auto" },
+                    h('table', { className: "w-full min-w-[760px] text-sm" },
+                        h('thead', null,
+                            h('tr', { className: "text-left border-b border-gray-200" },
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Type'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Amount'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Time'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Unit'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Details')
+                            )
+                        ),
+                        h('tbody', null,
+                            fuelRows.map((row) =>
+                                h('tr', { key: row.key, className: "border-b border-gray-100" },
+                                    h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, row.type || '-'),
+                                    h('td', { className: "py-2 pr-4 text-gray-800 font-bold" }, row.amount !== undefined ? formatNumber(row.amount) : '-'),
+                                    h('td', { className: "py-2 pr-4 text-gray-700" },
+                                        row.time ? formatDurationToHourMinute(row.time) : '-'
+                                    ),
+                                    h('td', { className: "py-2 pr-4 text-gray-600 font-semibold" }, row.unit ? String(row.unit).toUpperCase() : '-'),
+                                    h('td', { className: "py-2 pr-4 text-gray-600" }, row.details)
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        };
+
+        /**
+         * FuelImpactPage - Displays fuelAdjustments as impact rows.
+         * Columns: Type, Unit, Variation, Fuel Impact, Time Impact.
+         * @param {Object} props
+         * @param {Object|null} props.summary - Parsed flight backup object
+         */
+        const FuelImpactPage = ({ summary }) => {
+            const fuelAdjustments = Array.isArray(summary?.fuelAdjustments) ? summary.fuelAdjustments : [];
+
+            const formatSignedValue = (value, unit) => {
+                if (value === undefined || value === null || value === '') return '-';
+                const numeric = Number(value);
+                if (isNaN(numeric)) return '-';
+                const sign = numeric > 0 ? '+' : '';
+                return `${sign}${formatNumber(numeric)}${unit ? ` ${String(unit).toUpperCase()}` : ''}`;
+            };
+
+            const impactRows = fuelAdjustments.map((adjustment, index) => {
+                const adjustmentItems = Array.isArray(adjustment?.affectedItems?.adjustment)
+                    ? adjustment.affectedItems.adjustment
+                    : [];
+
+                const fuelItem = adjustmentItems.find((item) => String(item?.affectedItem).toLowerCase() === 'tripfuel');
+                const timeItem = adjustmentItems.find((item) => String(item?.affectedItem).toLowerCase() === 'triptime');
+
+                return {
+                    key: `${adjustment?.deviationReason || 'adjustment'}-${index}`,
+                    type: adjustment?.deviationReason || '-',
+                    unit: adjustment?.affectedItems?.unit ? String(adjustment.affectedItems.unit).toUpperCase() : '-',
+                    variation: formatSignedValue(adjustment?.affectedItems?.deviationReasonChange, adjustment?.affectedItems?.unit),
+                    fuelImpact: formatSignedValue(fuelItem?.value, fuelItem?.unit),
+                    timeImpact: formatSignedValue(timeItem?.value, timeItem?.unit)
+                };
+            });
+
+            if (!summary || impactRows.length === 0) {
+                return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm text-center text-gray-500" },
+                    h('h3', { className: "text-lg font-bold mb-2" }, 'Fuel Impact'),
+                    h('p', null, 'No fuel adjustment data found in flight.backup.')
+                );
+            }
+
+            return h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
+                h('h3', { className: "text-base sm:text-xl font-black text-gray-800 mb-4 sm:mb-6" }, 'Fuel Impact'),
+                h('div', { className: "overflow-x-auto" },
+                    h('table', { className: "w-full min-w-[760px] text-sm" },
+                        h('thead', null,
+                            h('tr', { className: "text-left border-b border-gray-200" },
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Type'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Unit'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Variation'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Fuel Impact'),
+                                h('th', { className: "py-2 pr-4 font-bold text-gray-500 uppercase tracking-wide text-xs" }, 'Time Impact')
+                            )
+                        ),
+                        h('tbody', null,
+                            impactRows.map((row) =>
+                                h('tr', { key: row.key, className: "border-b border-gray-100" },
+                                    h('td', { className: "py-2 pr-4 text-gray-700 font-semibold" }, row.type),
+                                    h('td', { className: "py-2 pr-4 text-gray-600 font-semibold" }, row.unit),
+                                    h('td', { className: "py-2 pr-4 text-gray-700" }, row.variation),
+                                    h('td', { className: "py-2 pr-4 text-gray-800 font-bold" }, row.fuelImpact),
+                                    h('td', { className: "py-2 pr-4 text-gray-700" }, row.timeImpact)
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+        };
+
+        /**
          * PdfViewer - Renders a single PDF using PDF.js onto a series of canvases.
          * Supports all pages on all platforms including iOS Safari.
          *
@@ -2915,6 +3141,27 @@
                                 onClick: () => setSelectedPage('OFP')
                             }, 'OFP'),
                             h('button', {
+                                className: `px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition ${selectedPage === 'weight' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                                onClick: () => {
+                                    setSelectedPage('weight');
+                                    setShowSettings(false);
+                                }
+                            }, 'Weight'),
+                            h('button', {
+                                className: `px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition ${selectedPage === 'fuel' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                                onClick: () => {
+                                    setSelectedPage('fuel');
+                                    setShowSettings(false);
+                                }
+                            }, 'Fuel'),
+                            h('button', {
+                                className: `px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition ${selectedPage === 'fuelImpact' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                                onClick: () => {
+                                    setSelectedPage('fuelImpact');
+                                    setShowSettings(false);
+                                }
+                            }, 'Fuel Impact'),
+                            h('button', {
                                 className: `px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition ${selectedPage === 'stations' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
                                 onClick: () => {
                                     setSelectedPage('stations');
@@ -3037,7 +3284,7 @@
                     scheduledTimes: flightSummaryData?.scheduledTimes || null
                 }),
 
-                // Page content (Summary, OFP, Stations, or Documents)
+                // Page content (Summary, OFP, Weight, Fuel, Fuel Impact, Stations, or Documents)
                 selectedPage === 'OFP'
                     ? h('div', { className: "space-y-4" },
                         h(OffBlockSection, {
@@ -3066,6 +3313,12 @@
                             route: routeData
                         })
                     )
+                    : selectedPage === 'weight'
+                        ? h(WeightPage, { summary: flightSummaryData })
+                    : selectedPage === 'fuel'
+                        ? h(FuelPage, { summary: flightSummaryData })
+                    : selectedPage === 'fuelImpact'
+                        ? h(FuelImpactPage, { summary: flightSummaryData })
                     : selectedPage === 'stations'
                         ? h(StationsPage, {
                             notams,
