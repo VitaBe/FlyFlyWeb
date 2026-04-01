@@ -2420,9 +2420,9 @@
 
             return h('div', { className: "space-y-4 sm:space-y-6" },
                 h('div', { className: "bg-white p-4 sm:p-8 rounded-2xl sm:rounded-[2rem] shadow-sm" },
-                    h('div', { className: "flex flex-wrap items-center justify-between gap-3" },
+                    h('div', { className: "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" },
                         h('h3', { className: "text-base sm:text-xl font-black text-gray-800" }, "Stations NOTAMs"),
-                        h('div', { className: "flex items-center gap-2" },
+                        h('div', { className: "flex flex-wrap items-center gap-2" },
                             h('span', { className: "px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-700 tracking-wide" }, `${stationGroups.length} Stations`),
                             h('span', { className: "px-3 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-700 tracking-wide" }, `${notams.length} NOTAMs`)
                         )
@@ -2430,7 +2430,7 @@
                 ),
 
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
-                    h('div', { className: "flex items-center justify-between gap-3 mb-3" },
+                    h('div', { className: "flex items-start sm:items-center justify-between gap-3 mb-3" },
                         h('h4', { className: "text-sm font-black text-gray-700 uppercase tracking-wide" }, "Select Station Grouped By Function"),
                         h('span', { className: "text-xs font-bold text-gray-500" }, `${safeTraversalIndex + 1}/${groupedTraversal.length}`)
                     ),
@@ -2455,7 +2455,7 @@
                 ),
 
                 h('div', { className: "bg-white p-4 sm:p-6 rounded-2xl sm:rounded-[2rem] shadow-sm" },
-                    h('div', { className: "flex flex-wrap items-center justify-between gap-3" },
+                    h('div', { className: "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" },
                         h('div', { className: "flex items-center gap-2" },
                             h('button', {
                                 type: 'button',
@@ -2474,7 +2474,7 @@
                                 'aria-label': 'Next station'
                             }, '→')
                         ),
-                        h('div', { className: "text-right" },
+                        h('div', { className: "sm:text-right" },
                             h('p', { className: "text-[10px] uppercase font-bold tracking-wider text-gray-400" }, "Station"),
                             h('h4', { className: "text-lg sm:text-2xl font-black text-gray-800" }, activeStation.code),
                             activeStation.name && h('p', { className: "text-sm sm:text-base text-gray-500 font-medium" }, activeStation.name),
@@ -2482,20 +2482,24 @@
                         )
                     ),
 
-                    h('div', { className: "flex flex-wrap items-center gap-2 mt-4" },
-                        h('span', { className: "text-xs uppercase font-bold tracking-wider text-gray-400 mr-1" }, "Level"),
-                        [
-                            { value: 'all', label: `All (${sortedStationNotams.length})` },
-                            { value: 'high', label: `High (${notamsByLevel.high.length})` },
-                            { value: 'medium', label: `Medium (${notamsByLevel.medium.length})` },
-                            { value: 'low', label: `Low (${notamsByLevel.low.length})` }
-                        ].map((filterOption) =>
-                            h('button', {
-                                key: filterOption.value,
-                                type: 'button',
-                                onClick: () => setPriorityFilter(filterOption.value),
-                                className: `px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold transition ${priorityFilter === filterOption.value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
-                            }, filterOption.label)
+                    h('div', { className: "mt-4" },
+                        h('span', { className: "text-xs uppercase font-bold tracking-wider text-gray-400" }, "Level"),
+                        h('div', { className: "mt-2 overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0" },
+                            h('div', { className: "flex items-center gap-2 min-w-max" },
+                                [
+                                    { value: 'all', label: `All (${sortedStationNotams.length})` },
+                                    { value: 'high', label: `High (${notamsByLevel.high.length})` },
+                                    { value: 'medium', label: `Medium (${notamsByLevel.medium.length})` },
+                                    { value: 'low', label: `Low (${notamsByLevel.low.length})` }
+                                ].map((filterOption) =>
+                                    h('button', {
+                                        key: filterOption.value,
+                                        type: 'button',
+                                        onClick: () => setPriorityFilter(filterOption.value),
+                                        className: `px-3 py-1.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition ${priorityFilter === filterOption.value ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`
+                                    }, filterOption.label)
+                                )
+                            )
                         )
                     )
                 ),
@@ -2674,33 +2678,37 @@
             return h('div', { className: "max-w-6xl mx-auto p-3 sm:p-6 animate-in" },
 
                 // Subpage menu (Overview / OFP) + Settings button
-                h('div', { className: "flex items-center gap-3 mb-4 sm:mb-6" },
-                    h('button', {
-                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'summary' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
-                        onClick: () => {
-                            setSelectedPage('summary');
-                            setShowSettings(false);
-                        }
-                    }, 'Overview'),
-                    h('button', {
-                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'OFP' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
-                        onClick: () => setSelectedPage('OFP')
-                    }, 'OFP'),
-                    h('button', {
-                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'stations' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
-                        onClick: () => {
-                            setSelectedPage('stations');
-                            setShowSettings(false);
-                        }
-                    }, 'Stations'),
-                    h('button', {
-                        className: `px-4 py-2 rounded-2xl font-bold transition ${selectedPage === 'documents' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
-                        onClick: () => {
-                            setSelectedPage('documents');
-                            setShowSettings(false);
-                        }
-                    }, 'Documents'),
-                    h('div', { className: "relative ml-auto" },
+                h('div', { className: "flex items-center gap-2 sm:gap-3 mb-4 sm:mb-6" },
+                    h('div', { className: "flex-1 overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0" },
+                        h('div', { className: "flex items-center gap-2 min-w-max" },
+                            h('button', {
+                                className: `px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition ${selectedPage === 'summary' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                                onClick: () => {
+                                    setSelectedPage('summary');
+                                    setShowSettings(false);
+                                }
+                            }, 'Overview'),
+                            h('button', {
+                                className: `px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition ${selectedPage === 'OFP' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                                onClick: () => setSelectedPage('OFP')
+                            }, 'OFP'),
+                            h('button', {
+                                className: `px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition ${selectedPage === 'stations' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                                onClick: () => {
+                                    setSelectedPage('stations');
+                                    setShowSettings(false);
+                                }
+                            }, 'Stations'),
+                            h('button', {
+                                className: `px-4 py-2 rounded-2xl text-sm sm:text-base font-bold whitespace-nowrap transition ${selectedPage === 'documents' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`,
+                                onClick: () => {
+                                    setSelectedPage('documents');
+                                    setShowSettings(false);
+                                }
+                            }, 'Documents')
+                        )
+                    ),
+                    h('div', { className: "relative shrink-0" },
                         h('button', {
                             onClick: () => setShowSettings(!showSettings),
                             className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-white border border-gray-200 hover:border-gray-300 p-2 rounded-lg transition-colors shadow-sm",
