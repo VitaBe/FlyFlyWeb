@@ -2723,7 +2723,7 @@
                     h('div', { className: "relative shrink-0" },
                         h('button', {
                             onClick: () => setShowSettings(!showSettings),
-                            className: "text-gray-400 hover:text-gray-600 font-bold text-sm bg-white border border-gray-200 hover:border-gray-300 p-2 rounded-lg transition-colors shadow-sm",
+                            className: "flex items-center justify-center text-gray-400 hover:text-gray-600 bg-gray-100 hover:bg-gray-200 py-2 px-2 aspect-square rounded-2xl transition-colors shadow-sm",
                             'aria-label': 'Toggle column settings',
                             title: 'Column settings'
                         }, h(Icon, { name: "settings", className: "w-4 h-4" })),
@@ -2772,7 +2772,7 @@
                             h('button', {
                                 onClick: () => setShowSettings(false),
                                 className: "w-full text-left text-sm font-bold text-gray-600 hover:text-gray-800 hover:bg-gray-50 px-3 py-2 rounded-lg transition-colors mb-1"
-                            }, "Close Settings"),
+                            }, "Close"),
 
                             // Close flight action
                             h('button', {
